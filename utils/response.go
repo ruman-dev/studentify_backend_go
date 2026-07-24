@@ -1,0 +1,59 @@
+package utils
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type SuccessResponse struct {
+	StatusCode int         `json:"statusCode"`
+	Success    bool        `json:"success"`
+	Message    string      `json:"message"`
+	Data       interface{} `json:"data,omitempty"`
+}
+
+type ErrorSource struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
+}
+
+type ErrorResponse struct {
+	Success      bool          `json:"success"`
+	Message      string        `json:"message"`
+	ErrorSources []ErrorSource `json:"errorSources,omitempty"`
+	Stack        string        `json:"stack,omitempty"`
+}
+
+func Success(w http.ResponseWriter, status int, message string, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(SuccessResponse{
+		StatusCode: status,
+		Success:    true,
+		Message:    message,
+		Data:       data,
+	})
+}
+
+func Error(w http.ResponseWriter, status int, message string, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(ErrorResponse{
+		Success: false,
+		Message: message,
+		ErrorSources: []ErrorSource{
+			{Path: "", Message: message},
+		},
+		Stack: err.Error(),
+	})
+}
+
+func ValidationError(w http.ResponseWriter, sources []ErrorSource) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(ErrorResponse{
+		Success:      false,
+		Message:      "Validation failed",
+		ErrorSources: sources,
+	})
+}
