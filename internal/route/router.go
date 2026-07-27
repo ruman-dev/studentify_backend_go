@@ -5,15 +5,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"softixa-solutions.com/studentify/internal/handlers"
+	"softixa-solutions.com/studentify/internal/modules/auth"
 )
 
-func Router() http.Handler {
+func NewRouter(authHandler *auth.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.StripSlashes)
-	r.Post("/auth/login", handlers.LoginHandler)
-	r.Post("/auth/register", handlers.RegisterHandler)
+
+	r.Route("/auth", func(r chi.Router) {
+		r.Post("/login", authHandler.Login)
+		r.Post("/register", authHandler.Register)
+	})
+
 	return r
 }

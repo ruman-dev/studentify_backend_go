@@ -8,7 +8,7 @@ import (
 
 var phoneRegex = regexp.MustCompile(`^\+?[1-9]\d{7,14}$`)
 
-func IsValidEmail(email string) bool {
+func Email(email string) bool {
 	if email == "" {
 		return false
 	}
@@ -16,12 +16,12 @@ func IsValidEmail(email string) bool {
 	return err == nil && addr.Address == email
 }
 
-func IsValidPhone(phone string) bool {
+func Phone(phone string) bool {
 	return phoneRegex.MatchString(phone)
 }
 
-// IsValidPassword requires at least 6 characters, one letter, and one digit.
-func IsValidPassword(password string) bool {
+// Password requires at least 6 characters, one letter, and one digit.
+func Password(password string) bool {
 	if len(password) < 6 {
 		return false
 	}
