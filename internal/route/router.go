@@ -17,6 +17,10 @@ func NewRouter(authHandler *auth.Handler) http.Handler {
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", authHandler.Login)
 		r.Post("/register", authHandler.Register)
+		r.Post("/verify-otp", authHandler.VerifyOTP)
+		r.Post("/forgot-password", authHandler.ForgotPassword)
+		r.Post("/forgot-password/verify-otp", authHandler.VerifyForgotPasswordOTP)
+		r.Post("/reset-password", authHandler.ResetPassword)
 	})
 
 	return r

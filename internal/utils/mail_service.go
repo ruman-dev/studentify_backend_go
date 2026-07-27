@@ -1,41 +1,52 @@
 package utils
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"os"
-	"time"
+	"strconv"
 
 	gomail "gopkg.in/mail.v2"
 )
 
-func GenerateOTP() string {
-	rand.Seed(time.Now().UnixNano())
-	return fmt.Sprintf("%06d", rand.Intn(1000000))
+func GenerateOTP() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
-func SendOTP(to string, otp string) error {
-	m := gomail.NewMessage()
+func SendOTP(to, otp string) error {
+	from := os.Getenv("SMTP_EMAIL")
+	password := os.Getenv("SMTP_PASSWORD")
+	host := os.Getenv("SMTP_HOST")
+	port := os.Getenv("SMTP_PORT")
+	if from == "" || password == "" || host == "" || port == "" {
+		return fmt.Errorf("SMTP_EMAIL, SMTP_PASSWORD, and SMTP_HOST are required")
+	}
 
-	m.SetHeader("From", os.Getenv("SMTP_EMAIL"))
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		return fmt.Errorf("convert smtp port to int: %w", err)
+	}
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", from)
 	m.SetHeader("To", to)
 	m.SetHeader("Subject", "Your OTP Code")
-
-	body := fmt.Sprintf(`
+	m.SetBody("text/html", fmt.Sprintf(`
 		<h2>Your Verification Code</h2>
 		<p>Your OTP is:</p>
 		<h1>%s</h1>
 		<p>This OTP expires in 5 minutes.</p>
-	`, otp)
+	`, otp))
 
-	m.SetBody("text/html", body)
-
-	d := gomail.NewDialer(
-		os.Getenv("SMTP_HOST"),
-		587,
-		os.Getenv("SMTP_EMAIL"),
-		os.Getenv("SMTP_PASSWORD"),
-	)
-
-	return d.DialAndSend(m)
+	d := gomail.NewDialer(host, portInt, from, password)
+	if err := d.DialAndSend(m); err != nil {
+		return fmt.Errorf("dial and send: %w", err)
+	}
+	return nil
 }

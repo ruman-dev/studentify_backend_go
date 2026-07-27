@@ -9,6 +9,8 @@ type User struct {
 	Phone        string
 	Password     string
 	ProfileImage string
+	OTP          string
+	OTPExpireAt  time.Time
 	IsVerified   bool
 	IsActive     bool
 	IsDeleted    bool
