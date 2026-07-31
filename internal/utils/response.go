@@ -6,10 +6,9 @@ import (
 )
 
 type SuccessResponse struct {
-	StatusCode int         `json:"statusCode"`
-	Success    bool        `json:"success"`
-	Message    string      `json:"message"`
-	Data       interface{} `json:"data,omitempty"`
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
 }
 
 type ErrorSource struct {
@@ -28,10 +27,9 @@ func Success(w http.ResponseWriter, status int, message string, data interface{}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(SuccessResponse{
-		StatusCode: status,
-		Success:    true,
-		Message:    message,
-		Data:       data,
+		Success: true,
+		Message: message,
+		Data:    data,
 	})
 }
 
