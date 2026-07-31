@@ -20,11 +20,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req CreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -60,11 +56,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	resp, err := h.service.List(r.Context(), userID)
 	if err != nil {
@@ -75,11 +67,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	resp, err := h.service.Get(r.Context(), userID, chi.URLParam(r, "id"))
 	if errors.Is(err, utils.ErrNotFound) {
@@ -94,11 +82,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -138,11 +122,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	err := h.service.Delete(r.Context(), userID, chi.URLParam(r, "id"))
 	if errors.Is(err, utils.ErrNotFound) {

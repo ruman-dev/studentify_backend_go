@@ -20,11 +20,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	resp, err := h.service.Get(r.Context(), userID)
 	if errors.Is(err, utils.ErrUserNotFound) {
@@ -40,11 +36,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
-	if !ok {
-		utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-		return
-	}
+	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req UpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
