@@ -1,4 +1,4 @@
-package auth
+package utils
 
 import (
 	"fmt"
@@ -51,6 +51,24 @@ func (t *TokenManager) Generate(userID, phone, role string) (string, error) {
 	return signed, nil
 }
 
+func (t *TokenManager) Parse(tokenStr string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return t.secret, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, ErrInvalidToken
+	}
+	return claims, nil
+}
+
 func (t *TokenManager) GenerateResetToken(userID, email string) (string, error) {
 	claims := ResetClaims{
 		UserID:  userID,
@@ -83,10 +101,10 @@ func (t *TokenManager) ParseResetToken(tokenStr string) (*ResetClaims, error) {
 
 	claims, ok := token.Claims.(*ResetClaims)
 	if !ok || !token.Valid {
-		return nil, fmt.Errorf("invalid reset token")
+		return nil, ErrInvalidResetToken
 	}
 	if claims.Purpose != resetTokenPurpose {
-		return nil, fmt.Errorf("invalid reset token purpose")
+		return nil, ErrInvalidResetToken
 	}
 	return claims, nil
 }

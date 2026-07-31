@@ -1,0 +1,243 @@
+package exams
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"softixa-solutions.com/studentify/internal/models"
+	"softixa-solutions.com/studentify/internal/utils"
+)
+
+type Service struct {
+	db *sql.DB
+}
+
+func NewService(db *sql.DB) *Service {
+	return &Service{db: db}
+}
+
+func (s *Service) Create(ctx context.Context, userID string, req CreateRequest, examDate time.Time) (*Response, error) {
+	if err := s.ensureSubject(ctx, userID, req.SubjectID); err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	e := &models.Exam{
+		ID:              uuid.New().String(),
+		UserID:          userID,
+		SubjectID:       strings.TrimSpace(req.SubjectID),
+		Title:           strings.TrimSpace(req.Title),
+		ExamDate:        examDate,
+		DurationMinutes: req.DurationMinutes,
+		Venue:           strings.TrimSpace(req.Venue),
+		TotalMarks:      req.TotalMarks,
+		ObtainedMarks:   req.ObtainedMarks,
+		Notes:           strings.TrimSpace(req.Notes),
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO exams (
+			id, user_id, subject_id, title, exam_date, duration_minutes, venue,
+			total_marks, obtained_marks, notes, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		e.ID, e.UserID, e.SubjectID, e.Title, e.ExamDate, nullInt(e.DurationMinutes), e.Venue,
+		nullFloat(e.TotalMarks), nullFloat(e.ObtainedMarks), e.Notes, e.CreatedAt, e.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create exam: %w", err)
+	}
+	return toResponse(e), nil
+}
+
+func (s *Service) List(ctx context.Context, userID, subjectID string) ([]Response, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	if subjectID != "" {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT id, user_id, subject_id, title, exam_date, duration_minutes, venue,
+				total_marks, obtained_marks, notes, created_at, updated_at
+			FROM exams
+			WHERE user_id = $1 AND subject_id = $2
+			ORDER BY exam_date ASC`, userID, subjectID,
+		)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT id, user_id, subject_id, title, exam_date, duration_minutes, venue,
+				total_marks, obtained_marks, notes, created_at, updated_at
+			FROM exams
+			WHERE user_id = $1
+			ORDER BY exam_date ASC`, userID,
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list exams: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]Response, 0)
+	for rows.Next() {
+		e, err := scanExam(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *toResponse(e))
+	}
+	return out, rows.Err()
+}
+
+func (s *Service) Get(ctx context.Context, userID, id string) (*Response, error) {
+	e, err := s.findOwned(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	return toResponse(e), nil
+}
+
+func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, examDate time.Time) (*Response, error) {
+	e, err := s.findOwned(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureSubject(ctx, userID, req.SubjectID); err != nil {
+		return nil, err
+	}
+
+	e.SubjectID = strings.TrimSpace(req.SubjectID)
+	e.Title = strings.TrimSpace(req.Title)
+	e.ExamDate = examDate
+	e.DurationMinutes = req.DurationMinutes
+	e.Venue = strings.TrimSpace(req.Venue)
+	e.TotalMarks = req.TotalMarks
+	e.ObtainedMarks = req.ObtainedMarks
+	e.Notes = strings.TrimSpace(req.Notes)
+	e.UpdatedAt = time.Now()
+
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE exams
+		SET subject_id = $3, title = $4, exam_date = $5, duration_minutes = $6, venue = $7,
+			total_marks = $8, obtained_marks = $9, notes = $10, updated_at = $11
+		WHERE id = $1 AND user_id = $2`,
+		id, userID, e.SubjectID, e.Title, e.ExamDate, nullInt(e.DurationMinutes), e.Venue,
+		nullFloat(e.TotalMarks), nullFloat(e.ObtainedMarks), e.Notes, e.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update exam: %w", err)
+	}
+	return toResponse(e), nil
+}
+
+func (s *Service) Delete(ctx context.Context, userID, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM exams WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return fmt.Errorf("delete exam: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return utils.ErrNotFound
+	}
+	return nil
+}
+
+func (s *Service) findOwned(ctx context.Context, userID, id string) (*models.Exam, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, user_id, subject_id, title, exam_date, duration_minutes, venue,
+			total_marks, obtained_marks, notes, created_at, updated_at
+		FROM exams
+		WHERE id = $1 AND user_id = $2`, id, userID,
+	)
+	e, err := scanExam(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, utils.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find exam: %w", err)
+	}
+	return e, nil
+}
+
+func (s *Service) ensureSubject(ctx context.Context, userID, subjectID string) error {
+	subjectID = strings.TrimSpace(subjectID)
+	var id string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id FROM subjects WHERE id = $1 AND user_id = $2`, subjectID, userID,
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return utils.ErrInvalidSubject
+	}
+	if err != nil {
+		return fmt.Errorf("check subject: %w", err)
+	}
+	return nil
+}
+
+type scannable interface {
+	Scan(dest ...any) error
+}
+
+func scanExam(row scannable) (*models.Exam, error) {
+	var e models.Exam
+	var duration sql.NullInt64
+	var total, obtained sql.NullFloat64
+	err := row.Scan(
+		&e.ID, &e.UserID, &e.SubjectID, &e.Title, &e.ExamDate, &duration, &e.Venue,
+		&total, &obtained, &e.Notes, &e.CreatedAt, &e.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if duration.Valid {
+		v := int(duration.Int64)
+		e.DurationMinutes = &v
+	}
+	if total.Valid {
+		v := total.Float64
+		e.TotalMarks = &v
+	}
+	if obtained.Valid {
+		v := obtained.Float64
+		e.ObtainedMarks = &v
+	}
+	return &e, nil
+}
+
+func toResponse(e *models.Exam) *Response {
+	return &Response{
+		ID:              e.ID,
+		SubjectID:       e.SubjectID,
+		Title:           e.Title,
+		ExamDate:        e.ExamDate.UTC().Format(time.RFC3339),
+		DurationMinutes: e.DurationMinutes,
+		Venue:           e.Venue,
+		TotalMarks:      e.TotalMarks,
+		ObtainedMarks:   e.ObtainedMarks,
+		Notes:           e.Notes,
+		CreatedAt:       e.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:       e.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func nullInt(v *int) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func nullFloat(v *float64) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
+}

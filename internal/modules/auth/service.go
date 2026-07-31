@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,16 +15,16 @@ import (
 )
 
 type Service struct {
-	repo   *Repository
-	tokens *TokenManager
+	db     *sql.DB
+	tokens *utils.TokenManager
 }
 
-func NewService(repo *Repository, tokens *TokenManager) *Service {
-	return &Service{repo: repo, tokens: tokens}
+func NewService(db *sql.DB, tokens *utils.TokenManager) *Service {
+	return &Service{db: db, tokens: tokens}
 }
 
 func (s *Service) Login(ctx context.Context, req LoginRequest) (*Response, error) {
-	u, err := s.repo.FindByEmail(ctx, req.Email)
+	u, err := s.findByEmail(ctx, req.Email)
 	if errors.Is(err, utils.ErrUserNotFound) {
 		return nil, utils.ErrUserNotFound
 	}
@@ -87,7 +88,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*string, e
 		UpdatedAt:    now,
 	}
 
-	if err := s.repo.Create(ctx, u); err != nil {
+	if err := s.create(ctx, u); err != nil {
 		return nil, err
 	}
 
@@ -99,7 +100,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*string, e
 }
 
 func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (*Response, error) {
-	u, err := s.repo.FindByEmail(ctx, req.Email)
+	u, err := s.findByEmail(ctx, req.Email)
 	if errors.Is(err, utils.ErrUserNotFound) {
 		return nil, utils.ErrUserNotFound
 	}
@@ -115,7 +116,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (*Respons
 		return nil, utils.ErrOTPExpired
 	}
 
-	if err := s.repo.MarkVerified(ctx, u.ID); err != nil {
+	if err := s.markVerified(ctx, u.ID); err != nil {
 		return nil, err
 	}
 
@@ -138,7 +139,7 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (*Respons
 }
 
 func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest) (*string, error) {
-	u, err := s.repo.FindByEmail(ctx, req.Email)
+	u, err := s.findByEmail(ctx, req.Email)
 	if errors.Is(err, utils.ErrUserNotFound) {
 		return nil, utils.ErrUserNotFound
 	}
@@ -152,7 +153,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 	}
 
 	expireAt := time.Now().Add(5 * time.Minute)
-	if err := s.repo.SaveOTP(ctx, u.ID, otp, expireAt); err != nil {
+	if err := s.saveOTP(ctx, u.ID, otp, expireAt); err != nil {
 		return nil, err
 	}
 
@@ -165,7 +166,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 }
 
 func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, req VerifyOTPRequest) (*ForgotPasswordOTPResponse, error) {
-	u, err := s.repo.FindByEmail(ctx, req.Email)
+	u, err := s.findByEmail(ctx, req.Email)
 	if errors.Is(err, utils.ErrUserNotFound) {
 		return nil, utils.ErrUserNotFound
 	}
@@ -186,7 +187,7 @@ func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, req VerifyOTPRequ
 		return nil, fmt.Errorf("generate reset token: %w", err)
 	}
 
-	if err := s.repo.ClearOTP(ctx, u.ID); err != nil {
+	if err := s.clearOTP(ctx, u.ID); err != nil {
 		return nil, err
 	}
 
@@ -206,7 +207,7 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, r
 		return nil, utils.ErrInvalidResetToken
 	}
 
-	u, err := s.repo.FindByEmail(ctx, req.Email)
+	u, err := s.findByEmail(ctx, req.Email)
 	if errors.Is(err, utils.ErrUserNotFound) {
 		return nil, utils.ErrUserNotFound
 	}
@@ -223,10 +224,125 @@ func (s *Service) ResetPassword(ctx context.Context, req ResetPasswordRequest, r
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	if err := s.repo.UpdatePassword(ctx, u.ID, string(hashed)); err != nil {
+	if err := s.updatePassword(ctx, u.ID, string(hashed)); err != nil {
 		return nil, err
 	}
 
 	successMsg := "Password updated successfully"
 	return &successMsg, nil
+}
+
+func (s *Service) findByEmail(ctx context.Context, email string) (*models.User, error) {
+	var u models.User
+	var otp sql.NullString
+	var otpExpireAt sql.NullTime
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, phone, name, email, profile_image, role, password,
+			otp, otp_expire_at, is_verified
+		FROM users
+		WHERE email = $1`, email,
+	).Scan(
+		&u.ID, &u.Phone, &u.FullName, &u.Email, &u.ProfileImage, &u.Role, &u.Password,
+		&otp, &otpExpireAt, &u.IsVerified,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, utils.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find user by email: %w", err)
+	}
+
+	if otp.Valid {
+		u.OTP = otp.String
+	}
+	if otpExpireAt.Valid {
+		u.OTPExpireAt = otpExpireAt.Time
+	}
+
+	return &u, nil
+}
+
+func (s *Service) create(ctx context.Context, u *models.User) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO users (
+			id, name, email, phone, password, profile_image,
+			otp, otp_expire_at,
+			is_verified, is_active, is_deleted, is_banned, is_suspended,
+			is_locked, is_expired, role, created_at, updated_at
+		) VALUES (
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
+		)`,
+		u.ID, u.FullName, u.Email, u.Phone, u.Password, u.ProfileImage,
+		u.OTP, u.OTPExpireAt,
+		u.IsVerified, u.IsActive, u.IsDeleted, u.IsBanned, u.IsSuspended,
+		u.IsLocked, u.IsExpired, u.Role, u.CreatedAt, u.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("create user: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) markVerified(ctx context.Context, userID string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET is_verified = true,
+			otp = NULL,
+			otp_expire_at = NULL,
+			updated_at = $2
+		WHERE id = $1`,
+		userID, time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("mark user verified: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) saveOTP(ctx context.Context, userID, otp string, expireAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET otp = $2,
+			otp_expire_at = $3,
+			updated_at = $4
+		WHERE id = $1`,
+		userID, otp, expireAt, time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("save otp: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) clearOTP(ctx context.Context, userID string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET otp = NULL,
+			otp_expire_at = NULL,
+			updated_at = $2
+		WHERE id = $1`,
+		userID, time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("clear otp: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) updatePassword(ctx context.Context, userID, passwordHash string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET password = $2,
+			otp = NULL,
+			otp_expire_at = NULL,
+			updated_at = $3
+		WHERE id = $1`,
+		userID, passwordHash, time.Now(),
+	)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	return nil
 }
