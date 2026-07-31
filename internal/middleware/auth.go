@@ -54,35 +54,3 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 	}
 	return claims.UserID, true
 }
-
-// RoleFromContext returns the authenticated user role, if present.
-func RoleFromContext(ctx context.Context) (string, bool) {
-	claims, ok := ClaimsFromContext(ctx)
-	if !ok || claims.Role == "" {
-		return "", false
-	}
-	return claims.Role, true
-}
-
-// RequireRole ensures the authenticated user has one of the allowed roles.
-func RequireRole(roles ...string) func(http.Handler) http.Handler {
-	allowed := make(map[string]struct{}, len(roles))
-	for _, role := range roles {
-		allowed[strings.ToUpper(role)] = struct{}{}
-	}
-
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			role, ok := RoleFromContext(r.Context())
-			if !ok {
-				utils.Error(w, http.StatusUnauthorized, "Unauthorized", utils.ErrInvalidToken)
-				return
-			}
-			if _, exists := allowed[strings.ToUpper(role)]; !exists {
-				utils.Error(w, http.StatusForbidden, "Forbidden", utils.ErrInvalidRole)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
