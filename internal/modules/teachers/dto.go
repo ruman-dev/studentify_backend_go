@@ -10,12 +10,12 @@ type CreateRequest struct {
 }
 
 type UpdateRequest struct {
-	FullName    string `json:"full_name"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone"`
-	Department  string `json:"department"`
-	Designation string `json:"designation"`
-	Notes       string `json:"notes"`
+	FullName    *string `json:"full_name"`
+	Email       *string `json:"email"`
+	Phone       *string `json:"phone"`
+	Department  *string `json:"department"`
+	Designation *string `json:"designation"`
+	Notes       *string `json:"notes"`
 }
 
 type Response struct {

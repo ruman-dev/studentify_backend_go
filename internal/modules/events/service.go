@@ -92,24 +92,53 @@ func (s *Service) Get(ctx context.Context, userID, id string) (*Response, error)
 	return toResponse(e), nil
 }
 
-func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, startsAt time.Time, endsAt *time.Time) (*Response, error) {
+func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest) (*Response, error) {
 	e, err := s.findOwned(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
 
-	subjectID, err := s.normalizeSubjectID(ctx, userID, req.SubjectID)
-	if err != nil {
-		return nil, err
+	if req.SubjectID != nil {
+		subjectID, err := s.normalizeSubjectID(ctx, userID, req.SubjectID)
+		if err != nil {
+			return nil, err
+		}
+		e.SubjectID = subjectID
 	}
-
-	e.SubjectID = subjectID
-	e.Title = strings.TrimSpace(req.Title)
-	e.Description = strings.TrimSpace(req.Description)
-	e.Location = strings.TrimSpace(req.Location)
-	e.StartsAt = startsAt
-	e.EndsAt = endsAt
-	e.EventType = normalizeEventType(req.EventType)
+	if req.Title != nil {
+		e.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Description != nil {
+		e.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.Location != nil {
+		e.Location = strings.TrimSpace(*req.Location)
+	}
+	if req.StartsAt != nil {
+		startsAt, err := time.Parse(time.RFC3339, strings.TrimSpace(*req.StartsAt))
+		if err != nil {
+			return nil, fmt.Errorf("parse starts_at: %w", err)
+		}
+		e.StartsAt = startsAt
+	}
+	if req.EndsAt != nil {
+		raw := strings.TrimSpace(*req.EndsAt)
+		if raw == "" {
+			e.EndsAt = nil
+		} else {
+			endsAt, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return nil, fmt.Errorf("parse ends_at: %w", err)
+			}
+			if endsAt.Before(e.StartsAt) {
+				return nil, fmt.Errorf("ends_at must be after starts_at")
+			}
+			e.EndsAt = &endsAt
+		}
+	}
+	if req.EventType != nil {
+		e.EventType = normalizeEventType(*req.EventType)
+	}
 	e.UpdatedAt = time.Now()
 
 	_, err = s.db.ExecContext(ctx, `

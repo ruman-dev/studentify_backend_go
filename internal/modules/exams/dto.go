@@ -12,14 +12,14 @@ type CreateRequest struct {
 }
 
 type UpdateRequest struct {
-	SubjectID       string   `json:"subject_id"`
-	Title           string   `json:"title"`
-	ExamDate        string   `json:"exam_date"`
+	SubjectID       *string  `json:"subject_id"`
+	Title           *string  `json:"title"`
+	ExamDate        *string  `json:"exam_date"`
 	DurationMinutes *int     `json:"duration_minutes"`
-	Venue           string   `json:"venue"`
+	Venue           *string  `json:"venue"`
 	TotalMarks      *float64 `json:"total_marks"`
 	ObtainedMarks   *float64 `json:"obtained_marks"`
-	Notes           string   `json:"notes"`
+	Notes           *string  `json:"notes"`
 }
 
 type Response struct {

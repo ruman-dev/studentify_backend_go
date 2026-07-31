@@ -81,10 +81,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		utils.ValidationError(w, []utils.ErrorSource{{Path: "name", Message: "Name is required"}})
-		return
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		req.Name = &trimmed
+		if trimmed == "" {
+			utils.ValidationError(w, []utils.ErrorSource{{Path: "name", Message: "Name cannot be empty"}})
+			return
+		}
 	}
 
 	resp, err := h.service.Update(r.Context(), userID, chi.URLParam(r, "id"), req)

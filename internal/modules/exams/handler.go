@@ -82,7 +82,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	examDate, sources := validateExamInput(req.SubjectID, req.Title, req.ExamDate)
+	examDate, sources := validateExamUpdate(req)
 	if len(sources) > 0 {
 		utils.ValidationError(w, sources)
 		return
@@ -137,6 +137,32 @@ func validateExamInput(subjectID, title, examDateRaw string) (time.Time, []utils
 			sources = append(sources, utils.ErrorSource{Path: "exam_date", Message: "Exam date must be RFC3339 datetime"})
 		} else {
 			examDate = parsed
+		}
+	}
+	return examDate, sources
+}
+
+func validateExamUpdate(req UpdateRequest) (*time.Time, []utils.ErrorSource) {
+	var sources []utils.ErrorSource
+	var examDate *time.Time
+
+	if req.SubjectID != nil && strings.TrimSpace(*req.SubjectID) == "" {
+		sources = append(sources, utils.ErrorSource{Path: "subject_id", Message: "Subject cannot be empty"})
+	}
+	if req.Title != nil && strings.TrimSpace(*req.Title) == "" {
+		sources = append(sources, utils.ErrorSource{Path: "title", Message: "Title cannot be empty"})
+	}
+	if req.ExamDate != nil {
+		raw := strings.TrimSpace(*req.ExamDate)
+		if raw == "" {
+			sources = append(sources, utils.ErrorSource{Path: "exam_date", Message: "Exam date cannot be empty"})
+		} else {
+			parsed, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				sources = append(sources, utils.ErrorSource{Path: "exam_date", Message: "Exam date must be RFC3339 datetime"})
+			} else {
+				examDate = &parsed
+			}
 		}
 	}
 	return examDate, sources

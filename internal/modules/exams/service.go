@@ -102,23 +102,40 @@ func (s *Service) Get(ctx context.Context, userID, id string) (*Response, error)
 	return toResponse(e), nil
 }
 
-func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, examDate time.Time) (*Response, error) {
+func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, examDate *time.Time) (*Response, error) {
 	e, err := s.findOwned(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.ensureSubject(ctx, userID, req.SubjectID); err != nil {
-		return nil, err
-	}
 
-	e.SubjectID = strings.TrimSpace(req.SubjectID)
-	e.Title = strings.TrimSpace(req.Title)
-	e.ExamDate = examDate
-	e.DurationMinutes = req.DurationMinutes
-	e.Venue = strings.TrimSpace(req.Venue)
-	e.TotalMarks = req.TotalMarks
-	e.ObtainedMarks = req.ObtainedMarks
-	e.Notes = strings.TrimSpace(req.Notes)
+	if req.SubjectID != nil {
+		subjectID := strings.TrimSpace(*req.SubjectID)
+		if err := s.ensureSubject(ctx, userID, subjectID); err != nil {
+			return nil, err
+		}
+		e.SubjectID = subjectID
+	}
+	if req.Title != nil {
+		e.Title = strings.TrimSpace(*req.Title)
+	}
+	if examDate != nil {
+		e.ExamDate = *examDate
+	}
+	if req.DurationMinutes != nil {
+		e.DurationMinutes = req.DurationMinutes
+	}
+	if req.Venue != nil {
+		e.Venue = strings.TrimSpace(*req.Venue)
+	}
+	if req.TotalMarks != nil {
+		e.TotalMarks = req.TotalMarks
+	}
+	if req.ObtainedMarks != nil {
+		e.ObtainedMarks = req.ObtainedMarks
+	}
+	if req.Notes != nil {
+		e.Notes = strings.TrimSpace(*req.Notes)
+	}
 	e.UpdatedAt = time.Now()
 
 	_, err = s.db.ExecContext(ctx, `

@@ -89,16 +89,25 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 		return nil, err
 	}
 
-	teacherID, err := s.normalizeTeacherID(ctx, userID, req.TeacherID)
-	if err != nil {
-		return nil, err
+	if req.TeacherID != nil {
+		teacherID, err := s.normalizeTeacherID(ctx, userID, req.TeacherID)
+		if err != nil {
+			return nil, err
+		}
+		sub.TeacherID = teacherID
 	}
-
-	sub.TeacherID = teacherID
-	sub.Name = strings.TrimSpace(req.Name)
-	sub.Code = strings.TrimSpace(req.Code)
-	sub.Description = strings.TrimSpace(req.Description)
-	sub.CreditHours = req.CreditHours
+	if req.Name != nil {
+		sub.Name = strings.TrimSpace(*req.Name)
+	}
+	if req.Code != nil {
+		sub.Code = strings.TrimSpace(*req.Code)
+	}
+	if req.Description != nil {
+		sub.Description = strings.TrimSpace(*req.Description)
+	}
+	if req.CreditHours != nil {
+		sub.CreditHours = req.CreditHours
+	}
 	sub.UpdatedAt = time.Now()
 
 	_, err = s.db.ExecContext(ctx, `

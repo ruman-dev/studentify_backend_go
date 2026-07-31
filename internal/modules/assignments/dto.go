@@ -9,11 +9,11 @@ type CreateRequest struct {
 }
 
 type UpdateRequest struct {
-	SubjectID   string `json:"subject_id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	DueDate     string `json:"due_date"`
-	Status      string `json:"status"`
+	SubjectID   *string `json:"subject_id"`
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	DueDate     *string `json:"due_date"`
+	Status      *string `json:"status"`
 }
 
 type Response struct {

@@ -82,7 +82,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dueDate, sources := validateAssignmentInput(req.SubjectID, req.Title, req.DueDate, req.Status)
+	dueDate, sources := validateAssignmentUpdate(req)
 	if len(sources) > 0 {
 		utils.ValidationError(w, sources)
 		return
@@ -140,6 +140,35 @@ func validateAssignmentInput(subjectID, title, dueDateRaw, status string) (time.
 		}
 	}
 	if !IsValidStatus(status) {
+		sources = append(sources, utils.ErrorSource{Path: "status", Message: "Status must be pending, submitted, graded, or overdue"})
+	}
+	return dueDate, sources
+}
+
+func validateAssignmentUpdate(req UpdateRequest) (*time.Time, []utils.ErrorSource) {
+	var sources []utils.ErrorSource
+	var dueDate *time.Time
+
+	if req.SubjectID != nil && strings.TrimSpace(*req.SubjectID) == "" {
+		sources = append(sources, utils.ErrorSource{Path: "subject_id", Message: "Subject cannot be empty"})
+	}
+	if req.Title != nil && strings.TrimSpace(*req.Title) == "" {
+		sources = append(sources, utils.ErrorSource{Path: "title", Message: "Title cannot be empty"})
+	}
+	if req.DueDate != nil {
+		raw := strings.TrimSpace(*req.DueDate)
+		if raw == "" {
+			sources = append(sources, utils.ErrorSource{Path: "due_date", Message: "Due date cannot be empty"})
+		} else {
+			parsed, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				sources = append(sources, utils.ErrorSource{Path: "due_date", Message: "Due date must be RFC3339 datetime"})
+			} else {
+				dueDate = &parsed
+			}
+		}
+	}
+	if req.Status != nil && !IsValidStatus(*req.Status) {
 		sources = append(sources, utils.ErrorSource{Path: "status", Message: "Status must be pending, submitted, graded, or overdue"})
 	}
 	return dueDate, sources

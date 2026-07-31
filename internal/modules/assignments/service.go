@@ -105,20 +105,31 @@ func (s *Service) Get(ctx context.Context, userID, id string) (*Response, error)
 	return toResponse(a), nil
 }
 
-func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, dueDate time.Time) (*Response, error) {
+func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, dueDate *time.Time) (*Response, error) {
 	a, err := s.findOwned(ctx, userID, id)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.ensureSubject(ctx, userID, req.SubjectID); err != nil {
-		return nil, err
-	}
 
-	a.SubjectID = strings.TrimSpace(req.SubjectID)
-	a.Title = strings.TrimSpace(req.Title)
-	a.Description = strings.TrimSpace(req.Description)
-	a.DueDate = dueDate
-	a.Status = normalizeStatus(req.Status)
+	if req.SubjectID != nil {
+		subjectID := strings.TrimSpace(*req.SubjectID)
+		if err := s.ensureSubject(ctx, userID, subjectID); err != nil {
+			return nil, err
+		}
+		a.SubjectID = subjectID
+	}
+	if req.Title != nil {
+		a.Title = strings.TrimSpace(*req.Title)
+	}
+	if req.Description != nil {
+		a.Description = strings.TrimSpace(*req.Description)
+	}
+	if dueDate != nil {
+		a.DueDate = *dueDate
+	}
+	if req.Status != nil {
+		a.Status = normalizeStatus(*req.Status)
+	}
 	a.UpdatedAt = time.Now()
 
 	_, err = s.db.ExecContext(ctx, `

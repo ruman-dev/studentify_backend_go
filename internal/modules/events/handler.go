@@ -82,13 +82,13 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	startsAt, endsAt, sources := validateEventInput(req.Title, req.StartsAt, req.EndsAt, req.EventType)
+	sources := validateEventUpdate(req)
 	if len(sources) > 0 {
 		utils.ValidationError(w, sources)
 		return
 	}
 
-	resp, err := h.service.Update(r.Context(), userID, chi.URLParam(r, "id"), req, startsAt, endsAt)
+	resp, err := h.service.Update(r.Context(), userID, chi.URLParam(r, "id"), req)
 	if errors.Is(err, utils.ErrNotFound) {
 		utils.Error(w, http.StatusNotFound, "Event not found", err)
 		return
@@ -152,4 +152,38 @@ func validateEventInput(title, startsAtRaw string, endsAtRaw *string, eventType 
 		sources = append(sources, utils.ErrorSource{Path: "event_type", Message: "event_type must be class, meeting, deadline, or other"})
 	}
 	return startsAt, endsAt, sources
+}
+
+func validateEventUpdate(req UpdateRequest) []utils.ErrorSource {
+	var sources []utils.ErrorSource
+	var startsAt time.Time
+
+	if req.Title != nil && strings.TrimSpace(*req.Title) == "" {
+		sources = append(sources, utils.ErrorSource{Path: "title", Message: "Title cannot be empty"})
+	}
+	if req.StartsAt != nil {
+		raw := strings.TrimSpace(*req.StartsAt)
+		if raw == "" {
+			sources = append(sources, utils.ErrorSource{Path: "starts_at", Message: "Start time cannot be empty"})
+		} else {
+			parsed, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				sources = append(sources, utils.ErrorSource{Path: "starts_at", Message: "starts_at must be RFC3339 datetime"})
+			} else {
+				startsAt = parsed
+			}
+		}
+	}
+	if req.EndsAt != nil && strings.TrimSpace(*req.EndsAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(*req.EndsAt))
+		if err != nil {
+			sources = append(sources, utils.ErrorSource{Path: "ends_at", Message: "ends_at must be RFC3339 datetime"})
+		} else if !startsAt.IsZero() && parsed.Before(startsAt) {
+			sources = append(sources, utils.ErrorSource{Path: "ends_at", Message: "ends_at must be after starts_at"})
+		}
+	}
+	if req.EventType != nil && !IsValidEventType(*req.EventType) {
+		sources = append(sources, utils.ErrorSource{Path: "event_type", Message: "event_type must be class, meeting, deadline, or other"})
+	}
+	return sources
 }

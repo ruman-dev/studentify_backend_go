@@ -87,12 +87,24 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 		return nil, err
 	}
 
-	t.FullName = strings.TrimSpace(req.FullName)
-	t.Email = strings.TrimSpace(req.Email)
-	t.Phone = strings.TrimSpace(req.Phone)
-	t.Department = strings.TrimSpace(req.Department)
-	t.Designation = strings.TrimSpace(req.Designation)
-	t.Notes = strings.TrimSpace(req.Notes)
+	if req.FullName != nil {
+		t.FullName = strings.TrimSpace(*req.FullName)
+	}
+	if req.Email != nil {
+		t.Email = strings.TrimSpace(*req.Email)
+	}
+	if req.Phone != nil {
+		t.Phone = strings.TrimSpace(*req.Phone)
+	}
+	if req.Department != nil {
+		t.Department = strings.TrimSpace(*req.Department)
+	}
+	if req.Designation != nil {
+		t.Designation = strings.TrimSpace(*req.Designation)
+	}
+	if req.Notes != nil {
+		t.Notes = strings.TrimSpace(*req.Notes)
+	}
 	t.UpdatedAt = time.Now()
 
 	_, err = s.db.ExecContext(ctx, `

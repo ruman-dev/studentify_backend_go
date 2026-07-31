@@ -9,9 +9,9 @@ type CreateRequest struct {
 }
 
 type UpdateRequest struct {
-	Name        string   `json:"name"`
-	Code        string   `json:"code"`
-	Description string   `json:"description"`
+	Name        *string  `json:"name"`
+	Code        *string  `json:"code"`
+	Description *string  `json:"description"`
 	TeacherID   *string  `json:"teacher_id"`
 	CreditHours *float64 `json:"credit_hours"`
 }

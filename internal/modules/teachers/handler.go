@@ -90,19 +90,27 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.FullName = strings.TrimSpace(req.FullName)
-	req.Email = strings.TrimSpace(req.Email)
-	req.Phone = strings.TrimSpace(req.Phone)
-
 	var sources []utils.ErrorSource
-	if req.FullName == "" {
-		sources = append(sources, utils.ErrorSource{Path: "full_name", Message: "Full name is required"})
+	if req.FullName != nil {
+		trimmed := strings.TrimSpace(*req.FullName)
+		req.FullName = &trimmed
+		if trimmed == "" {
+			sources = append(sources, utils.ErrorSource{Path: "full_name", Message: "Full name cannot be empty"})
+		}
 	}
-	if req.Email != "" && !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
+	if req.Email != nil {
+		trimmed := strings.TrimSpace(*req.Email)
+		req.Email = &trimmed
+		if trimmed != "" && !utils.Email(trimmed) {
+			sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
+		}
 	}
-	if req.Phone != "" && !utils.Phone(req.Phone) {
-		sources = append(sources, utils.ErrorSource{Path: "phone", Message: "Invalid phone number"})
+	if req.Phone != nil {
+		trimmed := strings.TrimSpace(*req.Phone)
+		req.Phone = &trimmed
+		if trimmed != "" && !utils.Phone(trimmed) {
+			sources = append(sources, utils.ErrorSource{Path: "phone", Message: "Invalid phone number"})
+		}
 	}
 	if len(sources) > 0 {
 		utils.ValidationError(w, sources)

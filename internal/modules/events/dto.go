@@ -12,12 +12,12 @@ type CreateRequest struct {
 
 type UpdateRequest struct {
 	SubjectID   *string `json:"subject_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Location    string  `json:"location"`
-	StartsAt    string  `json:"starts_at"`
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	Location    *string `json:"location"`
+	StartsAt    *string `json:"starts_at"`
 	EndsAt      *string `json:"ends_at"`
-	EventType   string  `json:"event_type"`
+	EventType   *string `json:"event_type"`
 }
 
 type Response struct {
