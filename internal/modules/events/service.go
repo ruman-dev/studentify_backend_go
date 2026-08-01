@@ -28,10 +28,27 @@ func NewService(db *sql.DB) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) Create(ctx context.Context, userID string, req CreateRequest, startsAt time.Time, endsAt *time.Time) (*Response, error) {
+func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) (*Response, error) {
 	subjectID, err := s.normalizeSubjectID(ctx, userID, req.SubjectID)
 	if err != nil {
 		return nil, err
+	}
+
+	startsAt, err := utils.ParseRFC3339(req.StartsAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse starts_at: %w", err)
+	}
+
+	var endsAt *time.Time
+	if req.EndsAt != nil && strings.TrimSpace(*req.EndsAt) != "" {
+		parsed, err := utils.ParseRFC3339(*req.EndsAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse ends_at: %w", err)
+		}
+		if parsed.Before(startsAt) {
+			return nil, utils.ErrConflict
+		}
+		endsAt = &parsed
 	}
 
 	now := time.Now()
@@ -115,7 +132,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 		e.Location = strings.TrimSpace(*req.Location)
 	}
 	if req.StartsAt != nil {
-		startsAt, err := time.Parse(time.RFC3339, strings.TrimSpace(*req.StartsAt))
+		startsAt, err := utils.ParseRFC3339(*req.StartsAt)
 		if err != nil {
 			return nil, fmt.Errorf("parse starts_at: %w", err)
 		}
@@ -126,12 +143,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 		if raw == "" {
 			e.EndsAt = nil
 		} else {
-			endsAt, err := time.Parse(time.RFC3339, raw)
+			endsAt, err := utils.ParseRFC3339(raw)
 			if err != nil {
 				return nil, fmt.Errorf("parse ends_at: %w", err)
 			}
 			if endsAt.Before(e.StartsAt) {
-				return nil, fmt.Errorf("ends_at must be after starts_at")
+				return nil, utils.ErrConflict
 			}
 			e.EndsAt = &endsAt
 		}
@@ -217,15 +234,6 @@ func normalizeEventType(eventType string) string {
 		return eventType
 	}
 	return "other"
-}
-
-func IsValidEventType(eventType string) bool {
-	eventType = strings.ToLower(strings.TrimSpace(eventType))
-	if eventType == "" {
-		return true
-	}
-	_, ok := allowedEventTypes[eventType]
-	return ok
 }
 
 type scannable interface {

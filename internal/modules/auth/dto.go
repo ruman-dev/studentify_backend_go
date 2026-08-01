@@ -1,30 +1,30 @@
 package auth
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"`
 }
 
 type RegisterRequest struct {
-	FullName     string `json:"full_name"`
-	Email        string `json:"email"`
-	Phone        string `json:"phone"`
-	Password     string `json:"password"`
+	FullName     string `json:"full_name" validate:"required"`
+	Email        string `json:"email" validate:"required,email"`
+	Phone        string `json:"phone" validate:"required,phone"`
+	Password     string `json:"password" validate:"required,password"`
 	ProfileImage string `json:"profile_image"`
 }
 
 type VerifyOTPRequest struct {
-	Email string `json:"email"`
-	OTP   string `json:"otp"`
+	Email string `json:"email" validate:"required,email"`
+	OTP   string `json:"otp" validate:"required"`
 }
 
 type ForgotPasswordRequest struct {
-	Email string `json:"email"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 type ResetPasswordRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,password"`
 }
 
 type Response struct {

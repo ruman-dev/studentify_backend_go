@@ -3,10 +3,10 @@ package profile
 import "time"
 
 type UpdateRequest struct {
-	FullName        *string `json:"full_name"`
-	Phone           *string `json:"phone"`
+	FullName        *string `json:"full_name" validate:"omitempty,min=1"`
+	Phone           *string `json:"phone" validate:"omitempty,phone"`
 	ProfileImage    *string `json:"profile_image"`
-	DateOfBirth     *string `json:"date_of_birth"`
+	DateOfBirth     *string `json:"date_of_birth" validate:"omitempty,date"`
 	InstituteName   *string `json:"institute_name"`
 	DegreeOrClass   *string `json:"degree_or_class"`
 	Section         *string `json:"section"`

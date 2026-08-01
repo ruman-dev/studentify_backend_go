@@ -28,9 +28,14 @@ func NewService(db *sql.DB) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) Create(ctx context.Context, userID string, req CreateRequest, dueDate time.Time) (*Response, error) {
+func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) (*Response, error) {
 	if err := s.ensureSubject(ctx, userID, req.SubjectID); err != nil {
 		return nil, err
+	}
+
+	dueDate, err := utils.ParseRFC3339(req.DueDate)
+	if err != nil {
+		return nil, fmt.Errorf("parse due_date: %w", err)
 	}
 
 	status := normalizeStatus(req.Status)
@@ -47,7 +52,7 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateRequest, 
 		UpdatedAt:   now,
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO assignments (
 			id, user_id, subject_id, title, description, due_date, status, created_at, updated_at
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
@@ -105,7 +110,7 @@ func (s *Service) Get(ctx context.Context, userID, id string) (*Response, error)
 	return toResponse(a), nil
 }
 
-func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, dueDate *time.Time) (*Response, error) {
+func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest) (*Response, error) {
 	a, err := s.findOwned(ctx, userID, id)
 	if err != nil {
 		return nil, err
@@ -124,8 +129,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	if req.Description != nil {
 		a.Description = strings.TrimSpace(*req.Description)
 	}
-	if dueDate != nil {
-		a.DueDate = *dueDate
+	if req.DueDate != nil {
+		dueDate, err := utils.ParseRFC3339(*req.DueDate)
+		if err != nil {
+			return nil, fmt.Errorf("parse due_date: %w", err)
+		}
+		a.DueDate = dueDate
 	}
 	if req.Status != nil {
 		a.Status = normalizeStatus(*req.Status)
@@ -201,15 +210,6 @@ func normalizeStatus(status string) string {
 		return status
 	}
 	return "pending"
-}
-
-func IsValidStatus(status string) bool {
-	status = strings.ToLower(strings.TrimSpace(status))
-	if status == "" {
-		return true
-	}
-	_, ok := allowedStatuses[status]
-	return ok
 }
 
 func toResponse(a *models.Assignment) *Response {

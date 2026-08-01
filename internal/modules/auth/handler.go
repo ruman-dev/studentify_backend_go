@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -19,24 +18,10 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	req.Email = strings.TrimSpace(req.Email)
-
-	var sources []utils.ErrorSource
-	if !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
-	}
-	if req.Password == "" {
-		sources = append(sources, utils.ErrorSource{Path: "password", Message: "Password is required"})
-	}
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
 
 	resp, err := h.service.Login(r.Context(), req)
 	if errors.Is(err, utils.ErrInvalidCredentials) {
@@ -53,32 +38,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	req.FullName = strings.TrimSpace(req.FullName)
 	req.Email = strings.TrimSpace(req.Email)
 	req.Phone = strings.TrimSpace(req.Phone)
-
-	var sources []utils.ErrorSource
-	if req.FullName == "" {
-		sources = append(sources, utils.ErrorSource{Path: "full_name", Message: "Full name is required"})
-	}
-	if !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
-	}
-	if !utils.Phone(req.Phone) {
-		sources = append(sources, utils.ErrorSource{Path: "phone", Message: "Invalid phone number. Use international format e.g. +1234567890"})
-	}
-	if !utils.Password(req.Password) {
-		sources = append(sources, utils.ErrorSource{Path: "password", Message: "Password must be at least 6 characters and include a letter and a number"})
-	}
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
 
 	resp, err := h.service.Register(r.Context(), req)
 	if err != nil {
@@ -91,25 +56,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	var req VerifyOTPRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	req.Email = strings.TrimSpace(req.Email)
 	req.OTP = strings.TrimSpace(req.OTP)
-
-	var sources []utils.ErrorSource
-	if !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
-	}
-	if req.OTP == "" {
-		sources = append(sources, utils.ErrorSource{Path: "register_otp", Message: "OTP is required"})
-	}
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
 
 	resp, err := h.service.VerifyOTP(r.Context(), req)
 	if errors.Is(err, utils.ErrUserNotFound) {
@@ -134,21 +85,10 @@ func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req ForgotPasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	req.Email = strings.TrimSpace(req.Email)
-
-	var sources []utils.ErrorSource
-	if !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
-	}
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
 
 	resp, err := h.service.ForgotPassword(r.Context(), req)
 	if errors.Is(err, utils.ErrUserNotFound) {
@@ -165,25 +105,11 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) VerifyForgotPasswordOTP(w http.ResponseWriter, r *http.Request) {
 	var req VerifyOTPRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	req.Email = strings.TrimSpace(req.Email)
 	req.OTP = strings.TrimSpace(req.OTP)
-
-	var sources []utils.ErrorSource
-	if !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
-	}
-	if req.OTP == "" {
-		sources = append(sources, utils.ErrorSource{Path: "otp", Message: "OTP is required"})
-	}
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
 
 	resp, err := h.service.VerifyForgotPasswordOTP(r.Context(), req)
 	if errors.Is(err, utils.ErrUserNotFound) {
@@ -208,29 +134,19 @@ func (h *Handler) VerifyForgotPasswordOTP(w http.ResponseWriter, r *http.Request
 
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var req ResetPasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
-
 	req.Email = strings.TrimSpace(req.Email)
+
 	resetToken := strings.TrimSpace(r.Header.Get("X-Reset-Token"))
 	if resetToken == "" {
 		resetToken = strings.TrimSpace(r.Header.Get("Reset-Token"))
 	}
-
-	var sources []utils.ErrorSource
-	if !utils.Email(req.Email) {
-		sources = append(sources, utils.ErrorSource{Path: "email", Message: "Invalid email address"})
-	}
 	if resetToken == "" {
-		sources = append(sources, utils.ErrorSource{Path: "X-Reset-Token", Message: "Reset token header is required"})
-	}
-	if !utils.Password(req.Password) {
-		sources = append(sources, utils.ErrorSource{Path: "password", Message: "Password must be at least 6 characters and include a letter and a number"})
-	}
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
+		utils.ValidationError(w, []utils.ErrorSource{
+			{Path: "X-Reset-Token", Message: "Reset token header is required"},
+		})
 		return
 	}
 

@@ -1,11 +1,9 @@
 package assignments
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"softixa-solutions.com/studentify/internal/middleware"
@@ -24,18 +22,11 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req CreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
 
-	dueDate, sources := validateAssignmentInput(req.SubjectID, req.Title, req.DueDate, req.Status)
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
-
-	resp, err := h.service.Create(r.Context(), userID, req, dueDate)
+	resp, err := h.service.Create(r.Context(), userID, req)
 	if errors.Is(err, utils.ErrInvalidSubject) {
 		utils.Error(w, http.StatusBadRequest, "Subject not found for this user", err)
 		return
@@ -77,18 +68,11 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req UpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
 
-	dueDate, sources := validateAssignmentUpdate(req)
-	if len(sources) > 0 {
-		utils.ValidationError(w, sources)
-		return
-	}
-
-	resp, err := h.service.Update(r.Context(), userID, chi.URLParam(r, "id"), req, dueDate)
+	resp, err := h.service.Update(r.Context(), userID, chi.URLParam(r, "id"), req)
 	if errors.Is(err, utils.ErrNotFound) {
 		utils.Error(w, http.StatusNotFound, "Assignment not found", err)
 		return
@@ -117,59 +101,4 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.Success(w, http.StatusOK, "Assignment deleted successfully", nil)
-}
-
-func validateAssignmentInput(subjectID, title, dueDateRaw, status string) (time.Time, []utils.ErrorSource) {
-	var sources []utils.ErrorSource
-	var dueDate time.Time
-
-	if strings.TrimSpace(subjectID) == "" {
-		sources = append(sources, utils.ErrorSource{Path: "subject_id", Message: "Subject is required"})
-	}
-	if strings.TrimSpace(title) == "" {
-		sources = append(sources, utils.ErrorSource{Path: "title", Message: "Title is required"})
-	}
-	if strings.TrimSpace(dueDateRaw) == "" {
-		sources = append(sources, utils.ErrorSource{Path: "due_date", Message: "Due date is required"})
-	} else {
-		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(dueDateRaw))
-		if err != nil {
-			sources = append(sources, utils.ErrorSource{Path: "due_date", Message: "Due date must be RFC3339 datetime"})
-		} else {
-			dueDate = parsed
-		}
-	}
-	if !IsValidStatus(status) {
-		sources = append(sources, utils.ErrorSource{Path: "status", Message: "Status must be pending, submitted, graded, or overdue"})
-	}
-	return dueDate, sources
-}
-
-func validateAssignmentUpdate(req UpdateRequest) (*time.Time, []utils.ErrorSource) {
-	var sources []utils.ErrorSource
-	var dueDate *time.Time
-
-	if req.SubjectID != nil && strings.TrimSpace(*req.SubjectID) == "" {
-		sources = append(sources, utils.ErrorSource{Path: "subject_id", Message: "Subject cannot be empty"})
-	}
-	if req.Title != nil && strings.TrimSpace(*req.Title) == "" {
-		sources = append(sources, utils.ErrorSource{Path: "title", Message: "Title cannot be empty"})
-	}
-	if req.DueDate != nil {
-		raw := strings.TrimSpace(*req.DueDate)
-		if raw == "" {
-			sources = append(sources, utils.ErrorSource{Path: "due_date", Message: "Due date cannot be empty"})
-		} else {
-			parsed, err := time.Parse(time.RFC3339, raw)
-			if err != nil {
-				sources = append(sources, utils.ErrorSource{Path: "due_date", Message: "Due date must be RFC3339 datetime"})
-			} else {
-				dueDate = &parsed
-			}
-		}
-	}
-	if req.Status != nil && !IsValidStatus(*req.Status) {
-		sources = append(sources, utils.ErrorSource{Path: "status", Message: "Status must be pending, submitted, graded, or overdue"})
-	}
-	return dueDate, sources
 }

@@ -2,22 +2,22 @@ package events
 
 type CreateRequest struct {
 	SubjectID   *string `json:"subject_id"`
-	Title       string  `json:"title"`
+	Title       string  `json:"title" validate:"required"`
 	Description string  `json:"description"`
 	Location    string  `json:"location"`
-	StartsAt    string  `json:"starts_at"`
-	EndsAt      *string `json:"ends_at"`
-	EventType   string  `json:"event_type"`
+	StartsAt    string  `json:"starts_at" validate:"required,datetime"`
+	EndsAt      *string `json:"ends_at" validate:"omitempty,datetime"`
+	EventType   string  `json:"event_type" validate:"omitempty,oneof=class meeting deadline other"`
 }
 
 type UpdateRequest struct {
 	SubjectID   *string `json:"subject_id"`
-	Title       *string `json:"title"`
+	Title       *string `json:"title" validate:"omitempty,min=1"`
 	Description *string `json:"description"`
 	Location    *string `json:"location"`
-	StartsAt    *string `json:"starts_at"`
-	EndsAt      *string `json:"ends_at"`
-	EventType   *string `json:"event_type"`
+	StartsAt    *string `json:"starts_at" validate:"omitempty,datetime"`
+	EndsAt      *string `json:"ends_at" validate:"omitempty,datetime"`
+	EventType   *string `json:"event_type" validate:"omitempty,oneof=class meeting deadline other"`
 }
 
 type Response struct {
