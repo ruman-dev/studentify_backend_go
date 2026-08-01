@@ -1,7 +1,7 @@
 package subjects
 
 type CreateRequest struct {
-	Name        string   `json:"name"`
+	Name        string   `json:"name" validate:"required"`
 	Code        string   `json:"code"`
 	Description string   `json:"description"`
 	TeacherID   *string  `json:"teacher_id"`
@@ -9,7 +9,7 @@ type CreateRequest struct {
 }
 
 type UpdateRequest struct {
-	Name        *string  `json:"name"`
+	Name        *string  `json:"name" validate:"omitempty,min=1"`
 	Code        *string  `json:"code"`
 	Description *string  `json:"description"`
 	TeacherID   *string  `json:"teacher_id"`

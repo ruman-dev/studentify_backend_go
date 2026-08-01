@@ -1,19 +1,19 @@
 package assignments
 
 type CreateRequest struct {
-	SubjectID   string `json:"subject_id"`
-	Title       string `json:"title"`
+	SubjectID   string `json:"subject_id" validate:"required"`
+	Title       string `json:"title" validate:"required"`
 	Description string `json:"description"`
-	DueDate     string `json:"due_date"`
-	Status      string `json:"status"`
+	DueDate     string `json:"due_date" validate:"required,datetime"`
+	Status      string `json:"status" validate:"omitempty,oneof=pending submitted graded overdue"`
 }
 
 type UpdateRequest struct {
-	SubjectID   *string `json:"subject_id"`
-	Title       *string `json:"title"`
+	SubjectID   *string `json:"subject_id" validate:"omitempty,min=1"`
+	Title       *string `json:"title" validate:"omitempty,min=1"`
 	Description *string `json:"description"`
-	DueDate     *string `json:"due_date"`
-	Status      *string `json:"status"`
+	DueDate     *string `json:"due_date" validate:"omitempty,datetime"`
+	Status      *string `json:"status" validate:"omitempty,oneof=pending submitted graded overdue"`
 }
 
 type Response struct {

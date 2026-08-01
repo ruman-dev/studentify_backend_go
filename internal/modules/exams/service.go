@@ -21,9 +21,14 @@ func NewService(db *sql.DB) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) Create(ctx context.Context, userID string, req CreateRequest, examDate time.Time) (*Response, error) {
+func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) (*Response, error) {
 	if err := s.ensureSubject(ctx, userID, req.SubjectID); err != nil {
 		return nil, err
+	}
+
+	examDate, err := utils.ParseRFC3339(req.ExamDate)
+	if err != nil {
+		return nil, fmt.Errorf("parse exam_date: %w", err)
 	}
 
 	now := time.Now()
@@ -42,7 +47,7 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateRequest, 
 		UpdatedAt:       now,
 	}
 
-	_, err := s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO exams (
 			id, user_id, subject_id, title, exam_date, duration_minutes, venue,
 			total_marks, obtained_marks, notes, created_at, updated_at
@@ -102,7 +107,7 @@ func (s *Service) Get(ctx context.Context, userID, id string) (*Response, error)
 	return toResponse(e), nil
 }
 
-func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest, examDate *time.Time) (*Response, error) {
+func (s *Service) Update(ctx context.Context, userID, id string, req UpdateRequest) (*Response, error) {
 	e, err := s.findOwned(ctx, userID, id)
 	if err != nil {
 		return nil, err
@@ -118,8 +123,12 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	if req.Title != nil {
 		e.Title = strings.TrimSpace(*req.Title)
 	}
-	if examDate != nil {
-		e.ExamDate = *examDate
+	if req.ExamDate != nil {
+		examDate, err := utils.ParseRFC3339(*req.ExamDate)
+		if err != nil {
+			return nil, fmt.Errorf("parse exam_date: %w", err)
+		}
+		e.ExamDate = examDate
 	}
 	if req.DurationMinutes != nil {
 		e.DurationMinutes = req.DurationMinutes

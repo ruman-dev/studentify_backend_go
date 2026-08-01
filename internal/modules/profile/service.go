@@ -48,7 +48,7 @@ func (s *Service) Update(ctx context.Context, userID string, req UpdateRequest) 
 		if raw == "" {
 			p.DateOfBirth = nil
 		} else {
-			dob, err := time.Parse("2006-01-02", raw)
+			dob, err := utils.ParseDate(raw)
 			if err != nil {
 				return nil, fmt.Errorf("invalid date_of_birth: %w", err)
 			}

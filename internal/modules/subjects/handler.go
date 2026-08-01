@@ -1,10 +1,8 @@
 package subjects
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"softixa-solutions.com/studentify/internal/middleware"
@@ -23,14 +21,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req CreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
-		return
-	}
-
-	req.Name = strings.TrimSpace(req.Name)
-	if req.Name == "" {
-		utils.ValidationError(w, []utils.ErrorSource{{Path: "name", Message: "Name is required"}})
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
 	}
 
@@ -76,18 +67,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	var req UpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Invalid JSON body", err)
+	if !utils.DecodeAndValidate(w, r, &req) {
 		return
-	}
-
-	if req.Name != nil {
-		trimmed := strings.TrimSpace(*req.Name)
-		req.Name = &trimmed
-		if trimmed == "" {
-			utils.ValidationError(w, []utils.ErrorSource{{Path: "name", Message: "Name cannot be empty"}})
-			return
-		}
 	}
 
 	resp, err := h.service.Update(r.Context(), userID, chi.URLParam(r, "id"), req)
