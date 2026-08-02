@@ -38,6 +38,17 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, http.StatusCreated, "Exam created successfully", resp)
 }
 
+func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	resp, err := h.service.ListTypes(r.Context(), userID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "Failed to list exam types", err)
+		return
+	}
+	utils.Success(w, http.StatusOK, "Exam types retrieved successfully", resp)
+}
+
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 

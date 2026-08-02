@@ -10,6 +10,7 @@ import (
 	"softixa-solutions.com/studentify/internal/modules/auth"
 	"softixa-solutions.com/studentify/internal/modules/events"
 	"softixa-solutions.com/studentify/internal/modules/exams"
+	"softixa-solutions.com/studentify/internal/modules/notifications"
 	"softixa-solutions.com/studentify/internal/modules/profile"
 	"softixa-solutions.com/studentify/internal/modules/subjects"
 	"softixa-solutions.com/studentify/internal/modules/teachers"
@@ -18,13 +19,14 @@ import (
 
 // Handlers groups all module HTTP handlers for router wiring.
 type Handlers struct {
-	Auth        *auth.Handler
-	Profile     *profile.Handler
-	Teachers    *teachers.Handler
-	Subjects    *subjects.Handler
-	Assignments *assignments.Handler
-	Exams       *exams.Handler
-	Events      *events.Handler
+	Auth          *auth.Handler
+	Profile       *profile.Handler
+	Teachers      *teachers.Handler
+	Subjects      *subjects.Handler
+	Assignments   *assignments.Handler
+	Exams         *exams.Handler
+	Events        *events.Handler
+	Notifications *notifications.Handler
 }
 
 type Dependencies struct {
@@ -89,6 +91,7 @@ func protectedRoutes(r chi.Router, h Handlers) {
 
 	r.Route("/exams", func(r chi.Router) {
 		r.Get("/", h.Exams.List)
+		r.Get("/types", h.Exams.ListTypes)
 		r.Post("/", h.Exams.Create)
 		r.Get("/{id}", h.Exams.Get)
 		r.Put("/{id}", h.Exams.Update)
@@ -101,5 +104,13 @@ func protectedRoutes(r chi.Router, h Handlers) {
 		r.Get("/{id}", h.Events.Get)
 		r.Put("/{id}", h.Events.Update)
 		r.Delete("/{id}", h.Events.Delete)
+	})
+
+	r.Route("/notifications", func(r chi.Router) {
+		r.Get("/", h.Notifications.List)
+		r.Post("/", h.Notifications.Create)
+		r.Post("/read-all", h.Notifications.MarkAllRead)
+		r.Get("/{id}", h.Notifications.Get)
+		r.Delete("/{id}", h.Notifications.Delete)
 	})
 }

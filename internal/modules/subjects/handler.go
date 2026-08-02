@@ -30,6 +30,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "Teacher not found for this user", err)
 		return
 	}
+	if errors.Is(err, utils.ErrInvalidScheduleTimes) {
+		utils.Error(w, http.StatusBadRequest, "end_time must be after start_time", err)
+		return
+	}
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "Failed to create subject", err)
 		return
@@ -78,6 +82,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, utils.ErrInvalidTeacher) {
 		utils.Error(w, http.StatusBadRequest, "Teacher not found for this user", err)
+		return
+	}
+	if errors.Is(err, utils.ErrInvalidScheduleTimes) {
+		utils.Error(w, http.StatusBadRequest, "end_time must be after start_time", err)
 		return
 	}
 	if err != nil {

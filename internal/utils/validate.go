@@ -34,6 +34,7 @@ func init() {
 	_ = validate.RegisterValidation("password", validatePassword)
 	_ = validate.RegisterValidation("date", validateDate)
 	_ = validate.RegisterValidation("datetime", validateDateTime)
+	_ = validate.RegisterValidation("timeofday", validateTimeOfDay)
 	_ = validate.RegisterValidation("softemail", validateSoftEmail)
 }
 
@@ -91,6 +92,15 @@ func validateDateTime(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
+func validateTimeOfDay(fl validator.FieldLevel) bool {
+	value := strings.TrimSpace(fl.Field().String())
+	if value == "" {
+		return true
+	}
+	_, err := time.Parse("15:04", value)
+	return err == nil
+}
+
 // DecodeAndValidate decodes JSON into dst and runs struct validation.
 // On failure it writes the error response and returns false.
 func DecodeAndValidate(w http.ResponseWriter, r *http.Request, dst any) bool {
@@ -143,6 +153,8 @@ func validationMessage(fe validator.FieldError) string {
 		return fmt.Sprintf("%s must be YYYY-MM-DD", field)
 	case "datetime":
 		return fmt.Sprintf("%s must be RFC3339 datetime", field)
+	case "timeofday":
+		return fmt.Sprintf("%s must be HH:MM (24-hour)", field)
 	case "min":
 		return fmt.Sprintf("%s cannot be empty", field)
 	case "oneof":

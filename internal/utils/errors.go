@@ -24,5 +24,6 @@ var (
 	ErrForbidden             = errors.New("Forbidden")
 	ErrConflict              = errors.New("Conflict")
 	ErrInvalidSubject        = errors.New("Invalid subject")
+	ErrInvalidScheduleTimes  = errors.New("end_time must be after start_time")
 	ErrInvalidTeacher        = errors.New("Invalid teacher")
 )

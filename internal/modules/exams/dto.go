@@ -2,7 +2,8 @@ package exams
 
 type CreateRequest struct {
 	SubjectID       string   `json:"subject_id" validate:"required"`
-	Title           string   `json:"title" validate:"required"`
+	Title           string   `json:"title"`
+	ExamType        string   `json:"exam_type"`
 	ExamDate        string   `json:"exam_date" validate:"required,datetime"`
 	DurationMinutes *int     `json:"duration_minutes"`
 	Venue           string   `json:"venue"`
@@ -13,7 +14,8 @@ type CreateRequest struct {
 
 type UpdateRequest struct {
 	SubjectID       *string  `json:"subject_id" validate:"omitempty,min=1"`
-	Title           *string  `json:"title" validate:"omitempty,min=1"`
+	Title           *string  `json:"title"`
+	ExamType        *string  `json:"exam_type"`
 	ExamDate        *string  `json:"exam_date" validate:"omitempty,datetime"`
 	DurationMinutes *int     `json:"duration_minutes"`
 	Venue           *string  `json:"venue"`
@@ -26,6 +28,7 @@ type Response struct {
 	ID              string   `json:"id"`
 	SubjectID       string   `json:"subjectId"`
 	Title           string   `json:"title"`
+	ExamType        string   `json:"examType"`
 	ExamDate        string   `json:"examDate"`
 	DurationMinutes *int     `json:"durationMinutes,omitempty"`
 	Venue           string   `json:"venue"`
@@ -34,4 +37,8 @@ type Response struct {
 	Notes           string   `json:"notes"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
+}
+
+type ExamTypesResponse struct {
+	Types []string `json:"types"`
 }
