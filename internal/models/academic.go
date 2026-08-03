@@ -120,3 +120,23 @@ type Event struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
+
+// Attendance status values for self-tracked class sessions.
+const (
+	AttendancePresent = "present"
+	AttendanceAbsent  = "absent"
+	AttendanceLate    = "late"
+	AttendanceExcused = "excused"
+)
+
+type AttendanceRecord struct {
+	ID          string
+	UserID      string
+	SubjectID   string
+	SessionDate time.Time // date-only (UTC midnight)
+	Status      string
+	Note        string
+	MarkedAt    time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}

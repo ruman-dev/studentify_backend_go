@@ -6,6 +6,7 @@ import (
 
 	"softixa-solutions.com/studentify/internal/config"
 	"softixa-solutions.com/studentify/internal/modules/assignments"
+	"softixa-solutions.com/studentify/internal/modules/attendance"
 	"softixa-solutions.com/studentify/internal/modules/auth"
 	"softixa-solutions.com/studentify/internal/modules/events"
 	"softixa-solutions.com/studentify/internal/modules/exams"
@@ -33,19 +34,21 @@ func New(cfg *config.Config, db *sql.DB) *Server {
 	examsHandler := exams.NewHandler(exams.NewService(db))
 	eventsHandler := events.NewHandler(events.NewService(db))
 	notificationsHandler := notifications.NewHandler(notifications.NewService(db))
+	attendanceHandler := attendance.NewHandler(attendance.NewService(db))
 
 	return &Server{
 		cfg: cfg,
 		router: route.NewRouter(route.Dependencies{
 			Handlers: route.Handlers{
-				Auth:           authHandler,
-				Profile:        profileHandler,
-				Teachers:       teachersHandler,
-				Subjects:       subjectsHandler,
-				Assignments:    assignmentsHandler,
-				Exams:          examsHandler,
-				Events:         eventsHandler,
-				Notifications:  notificationsHandler,
+				Auth:          authHandler,
+				Profile:       profileHandler,
+				Teachers:      teachersHandler,
+				Subjects:      subjectsHandler,
+				Assignments:   assignmentsHandler,
+				Exams:         examsHandler,
+				Events:        eventsHandler,
+				Notifications: notificationsHandler,
+				Attendance:    attendanceHandler,
 			},
 			Tokens: tokens,
 		}),
