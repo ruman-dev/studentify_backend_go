@@ -51,17 +51,41 @@ func (h *Handler) SubjectDetail(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListToday(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
-	day := time.Now()
-	if raw := r.URL.Query().Get("date"); raw != "" {
+	now := time.Now()
+	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	to := from.Add(24 * time.Hour)
+
+	if rawFrom := r.URL.Query().Get("from"); rawFrom != "" {
+		parsed, err := time.Parse(time.RFC3339, rawFrom)
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, "from must be RFC3339", err)
+			return
+		}
+		from = parsed
+	} else if raw := r.URL.Query().Get("date"); raw != "" {
 		parsed, err := time.Parse("2006-01-02", raw)
 		if err != nil {
 			utils.Error(w, http.StatusBadRequest, "date must be YYYY-MM-DD", err)
 			return
 		}
-		day = parsed
+		// Treat civil date as UTC day bounds (legacy). Prefer `from`/`to`.
+		from = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, time.UTC)
 	}
 
-	resp, err := h.service.ListToday(r.Context(), userID, day)
+	if rawTo := r.URL.Query().Get("to"); rawTo != "" {
+		parsed, err := time.Parse(time.RFC3339, rawTo)
+		if err != nil {
+			utils.Error(w, http.StatusBadRequest, "to must be RFC3339", err)
+			return
+		}
+		to = parsed
+	} else if r.URL.Query().Get("from") == "" && r.URL.Query().Get("date") != "" {
+		to = from.Add(24 * time.Hour)
+	} else if r.URL.Query().Get("from") != "" {
+		to = from.Add(24 * time.Hour)
+	}
+
+	resp, err := h.service.ListInRange(r.Context(), userID, from, to)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "Failed to list today's attendance", err)
 		return
@@ -83,7 +107,7 @@ func (h *Handler) Mark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, utils.ErrInvalidInput) {
-		utils.Error(w, http.StatusBadRequest, "Invalid session date", err)
+		utils.Error(w, http.StatusBadRequest, "Invalid class session time", err)
 		return
 	}
 	if err != nil {

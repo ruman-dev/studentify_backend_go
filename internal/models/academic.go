@@ -130,13 +130,14 @@ const (
 )
 
 type AttendanceRecord struct {
-	ID          string
-	UserID      string
-	SubjectID   string
-	SessionDate time.Time // date-only (UTC midnight)
-	Status      string
-	Note        string
-	MarkedAt    time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID              string
+	UserID          string
+	SubjectID       string
+	SessionStartsAt time.Time
+	SessionEndsAt   *time.Time
+	Status          string
+	Note            string
+	MarkedAt        time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }

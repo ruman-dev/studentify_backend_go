@@ -27,28 +27,42 @@ func (s *Service) Mark(ctx context.Context, userID string, req MarkRequest) (*Re
 		return nil, err
 	}
 
-	sessionDate, err := parseSessionDate(req.SessionDate)
+	startsAt, err := parseRFC3339(req.SessionStartsAt)
 	if err != nil {
-		return nil, fmt.Errorf("%w: session_date must be YYYY-MM-DD", utils.ErrInvalidInput)
+		return nil, fmt.Errorf("%w: session_starts_at must be RFC3339", utils.ErrInvalidInput)
+	}
+	startsAt = truncateToMinute(startsAt.UTC())
+
+	var endsAt *time.Time
+	if req.SessionEndsAt != nil && strings.TrimSpace(*req.SessionEndsAt) != "" {
+		parsed, err := parseRFC3339(*req.SessionEndsAt)
+		if err != nil {
+			return nil, fmt.Errorf("%w: session_ends_at must be RFC3339", utils.ErrInvalidInput)
+		}
+		utc := truncateToMinute(parsed.UTC())
+		if !utc.After(startsAt) {
+			return nil, fmt.Errorf("%w: session_ends_at must be after session_starts_at", utils.ErrInvalidInput)
+		}
+		endsAt = &utc
 	}
 
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 	note := strings.TrimSpace(req.Note)
-	now := time.Now()
+	now := time.Now().UTC()
 
 	var existingID string
 	err = s.db.QueryRowContext(ctx, `
 		SELECT id FROM attendance_records
-		WHERE user_id = $1 AND subject_id = $2 AND session_date = $3`,
-		userID, subjectID, sessionDate,
+		WHERE user_id = $1 AND subject_id = $2 AND session_starts_at = $3`,
+		userID, subjectID, startsAt,
 	).Scan(&existingID)
 
 	if err == nil {
 		_, err = s.db.ExecContext(ctx, `
 			UPDATE attendance_records
-			SET status = $3, note = $4, marked_at = $5, updated_at = $5
+			SET status = $3, note = $4, session_ends_at = $5, marked_at = $6, updated_at = $6
 			WHERE id = $1 AND user_id = $2`,
-			existingID, userID, status, note, now,
+			existingID, userID, status, note, nullTime(endsAt), now,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("update attendance: %w", err)
@@ -62,9 +76,10 @@ func (s *Service) Mark(ctx context.Context, userID string, req MarkRequest) (*Re
 	id := uuid.New().String()
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO attendance_records (
-			id, user_id, subject_id, session_date, status, note, marked_at, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$7)`,
-		id, userID, subjectID, sessionDate, status, note, now,
+			id, user_id, subject_id, session_starts_at, session_ends_at,
+			status, note, marked_at, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8,$8)`,
+		id, userID, subjectID, startsAt, nullTime(endsAt), status, note, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create attendance: %w", err)
@@ -84,7 +99,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	if req.Note != nil {
 		rec.Note = strings.TrimSpace(*req.Note)
 	}
-	rec.UpdatedAt = time.Now()
+	rec.UpdatedAt = time.Now().UTC()
 	rec.MarkedAt = rec.UpdatedAt
 
 	_, err = s.db.ExecContext(ctx, `
@@ -188,12 +203,13 @@ func (s *Service) SubjectDetail(ctx context.Context, userID, subjectID string) (
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT a.id, a.subject_id, s.name, s.code, a.session_date, a.status, a.note,
+		SELECT a.id, a.subject_id, s.name, s.code,
+			a.session_starts_at, a.session_ends_at, a.status, a.note,
 			a.marked_at, a.created_at, a.updated_at
 		FROM attendance_records a
 		JOIN subjects s ON s.id = a.subject_id
 		WHERE a.user_id = $1 AND a.subject_id = $2
-		ORDER BY a.session_date DESC, a.marked_at DESC`,
+		ORDER BY a.session_starts_at DESC, a.marked_at DESC`,
 		userID, subjectID,
 	)
 	if err != nil {
@@ -219,19 +235,25 @@ func (s *Service) SubjectDetail(ctx context.Context, userID, subjectID string) (
 	}, nil
 }
 
-func (s *Service) ListToday(ctx context.Context, userID string, day time.Time) ([]RecordResponse, error) {
-	sessionDate := dateOnly(day)
+func (s *Service) ListInRange(ctx context.Context, userID string, from, to time.Time) ([]RecordResponse, error) {
+	if !to.After(from) {
+		return nil, fmt.Errorf("%w: to must be after from", utils.ErrInvalidInput)
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT a.id, a.subject_id, s.name, s.code, a.session_date, a.status, a.note,
+		SELECT a.id, a.subject_id, s.name, s.code,
+			a.session_starts_at, a.session_ends_at, a.status, a.note,
 			a.marked_at, a.created_at, a.updated_at
 		FROM attendance_records a
 		JOIN subjects s ON s.id = a.subject_id
-		WHERE a.user_id = $1 AND a.session_date = $2
-		ORDER BY a.marked_at DESC`,
-		userID, sessionDate,
+		WHERE a.user_id = $1
+			AND a.session_starts_at >= $2
+			AND a.session_starts_at < $3
+		ORDER BY a.session_starts_at ASC`,
+		userID, from.UTC(), to.UTC(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list today attendance: %w", err)
+		return nil, fmt.Errorf("list attendance range: %w", err)
 	}
 	defer rows.Close()
 
@@ -248,7 +270,8 @@ func (s *Service) ListToday(ctx context.Context, userID string, day time.Time) (
 
 func (s *Service) getRecord(ctx context.Context, userID, id string) (*RecordResponse, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT a.id, a.subject_id, s.name, s.code, a.session_date, a.status, a.note,
+		SELECT a.id, a.subject_id, s.name, s.code,
+			a.session_starts_at, a.session_ends_at, a.status, a.note,
 			a.marked_at, a.created_at, a.updated_at
 		FROM attendance_records a
 		JOIN subjects s ON s.id = a.subject_id
@@ -266,19 +289,24 @@ func (s *Service) getRecord(ctx context.Context, userID, id string) (*RecordResp
 
 func (s *Service) findOwned(ctx context.Context, userID, id string) (*models.AttendanceRecord, error) {
 	var rec models.AttendanceRecord
+	var endsAt sql.NullTime
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, user_id, subject_id, session_date, status, note, marked_at, created_at, updated_at
+		SELECT id, user_id, subject_id, session_starts_at, session_ends_at,
+			status, note, marked_at, created_at, updated_at
 		FROM attendance_records
 		WHERE id = $1 AND user_id = $2`, id, userID,
 	).Scan(
-		&rec.ID, &rec.UserID, &rec.SubjectID, &rec.SessionDate, &rec.Status, &rec.Note,
-		&rec.MarkedAt, &rec.CreatedAt, &rec.UpdatedAt,
+		&rec.ID, &rec.UserID, &rec.SubjectID, &rec.SessionStartsAt, &endsAt,
+		&rec.Status, &rec.Note, &rec.MarkedAt, &rec.CreatedAt, &rec.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, utils.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("find attendance: %w", err)
+	}
+	if endsAt.Valid {
+		rec.SessionEndsAt = &endsAt.Time
 	}
 	return &rec, nil
 }
@@ -304,40 +332,50 @@ type scannable interface {
 func scanRecordResponse(row scannable) (*RecordResponse, error) {
 	var (
 		id, subjectID, subjectName, subjectCode, status, note string
-		sessionDate                                           time.Time
-		markedAt, createdAt, updatedAt                        time.Time
+		startsAt, markedAt, createdAt, updatedAt              time.Time
+		endsAt                                                sql.NullTime
 	)
 	err := row.Scan(
-		&id, &subjectID, &subjectName, &subjectCode, &sessionDate, &status, &note,
+		&id, &subjectID, &subjectName, &subjectCode,
+		&startsAt, &endsAt, &status, &note,
 		&markedAt, &createdAt, &updatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &RecordResponse{
-		ID:          id,
-		SubjectID:   subjectID,
-		SubjectName: subjectName,
-		SubjectCode: subjectCode,
-		SessionDate: sessionDate.UTC().Format("2006-01-02"),
-		Status:      status,
-		Note:        note,
-		MarkedAt:    markedAt.UTC().Format(time.RFC3339),
-		CreatedAt:   createdAt.UTC().Format(time.RFC3339),
-		UpdatedAt:   updatedAt.UTC().Format(time.RFC3339),
-	}, nil
-}
 
-func parseSessionDate(value string) (time.Time, error) {
-	t, err := time.Parse("2006-01-02", strings.TrimSpace(value))
-	if err != nil {
-		return time.Time{}, err
+	resp := &RecordResponse{
+		ID:              id,
+		SubjectID:       subjectID,
+		SubjectName:     subjectName,
+		SubjectCode:     subjectCode,
+		SessionStartsAt: startsAt.UTC().Format(time.RFC3339),
+		Status:          status,
+		Note:            note,
+		MarkedAt:        markedAt.UTC().Format(time.RFC3339),
+		CreatedAt:       createdAt.UTC().Format(time.RFC3339),
+		UpdatedAt:       updatedAt.UTC().Format(time.RFC3339),
 	}
-	return dateOnly(t), nil
+	if endsAt.Valid {
+		v := endsAt.Time.UTC().Format(time.RFC3339)
+		resp.SessionEndsAt = &v
+	}
+	return resp, nil
 }
 
-func dateOnly(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+func parseRFC3339(value string) (time.Time, error) {
+	return time.Parse(time.RFC3339, strings.TrimSpace(value))
+}
+
+func truncateToMinute(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
+}
+
+func nullTime(v *time.Time) interface{} {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func percentage(attended, total int) float64 {

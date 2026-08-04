@@ -1,10 +1,11 @@
 package attendance
 
 type MarkRequest struct {
-	SubjectID   string `json:"subject_id" validate:"required"`
-	SessionDate string `json:"session_date" validate:"required"` // YYYY-MM-DD
-	Status      string `json:"status" validate:"required,oneof=present absent late excused"`
-	Note        string `json:"note"`
+	SubjectID       string  `json:"subject_id" validate:"required"`
+	SessionStartsAt string  `json:"session_starts_at" validate:"required"` // RFC3339
+	SessionEndsAt   *string `json:"session_ends_at"`                       // RFC3339 optional
+	Status          string  `json:"status" validate:"required,oneof=present absent late excused"`
+	Note            string  `json:"note"`
 }
 
 type UpdateRequest struct {
@@ -13,16 +14,17 @@ type UpdateRequest struct {
 }
 
 type RecordResponse struct {
-	ID          string `json:"id"`
-	SubjectID   string `json:"subjectId"`
-	SubjectName string `json:"subjectName,omitempty"`
-	SubjectCode string `json:"subjectCode,omitempty"`
-	SessionDate string `json:"sessionDate"` // YYYY-MM-DD
-	Status      string `json:"status"`
-	Note        string `json:"note"`
-	MarkedAt    string `json:"markedAt"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID              string  `json:"id"`
+	SubjectID       string  `json:"subjectId"`
+	SubjectName     string  `json:"subjectName,omitempty"`
+	SubjectCode     string  `json:"subjectCode,omitempty"`
+	SessionStartsAt string  `json:"sessionStartsAt"`
+	SessionEndsAt   *string `json:"sessionEndsAt,omitempty"`
+	Status          string  `json:"status"`
+	Note            string  `json:"note"`
+	MarkedAt        string  `json:"markedAt"`
+	CreatedAt       string  `json:"createdAt"`
+	UpdatedAt       string  `json:"updatedAt"`
 }
 
 type SubjectSummary struct {
