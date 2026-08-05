@@ -48,6 +48,10 @@ func (s *Service) Mark(ctx context.Context, userID string, req MarkRequest) (*Re
 
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 	note := strings.TrimSpace(req.Note)
+	// Notes are for late / absent / excused only.
+	if status == "present" {
+		note = ""
+	}
 	now := time.Now().UTC()
 
 	var existingID string
@@ -98,6 +102,10 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	}
 	if req.Note != nil {
 		rec.Note = strings.TrimSpace(*req.Note)
+	}
+	// Notes are for late / absent / excused only.
+	if rec.Status == "present" {
+		rec.Note = ""
 	}
 	rec.UpdatedAt = time.Now().UTC()
 	rec.MarkedAt = rec.UpdatedAt

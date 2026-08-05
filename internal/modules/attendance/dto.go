@@ -5,12 +5,14 @@ type MarkRequest struct {
 	SessionStartsAt string  `json:"session_starts_at" validate:"required"` // RFC3339
 	SessionEndsAt   *string `json:"session_ends_at"`                       // RFC3339 optional
 	Status          string  `json:"status" validate:"required,oneof=present absent late excused"`
-	Note            string  `json:"note"`
+	// Optional reason; stored for late/absent/excused. Cleared when status is present.
+	Note string `json:"note"`
 }
 
 type UpdateRequest struct {
 	Status *string `json:"status" validate:"omitempty,oneof=present absent late excused"`
-	Note   *string `json:"note"`
+	// Optional reason; stored for late/absent/excused. Cleared when status is present.
+	Note *string `json:"note"`
 }
 
 type RecordResponse struct {
