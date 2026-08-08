@@ -31,11 +31,26 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "Subject not found for this user", err)
 		return
 	}
+	if errors.Is(err, utils.ErrInvalidInput) {
+		utils.Error(w, http.StatusBadRequest, err.Error(), err)
+		return
+	}
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "Failed to create exam", err)
 		return
 	}
 	utils.Success(w, http.StatusCreated, "Exam created successfully", resp)
+}
+
+func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	resp, err := h.service.ListTypes(r.Context(), userID)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "Failed to list exam types", err)
+		return
+	}
+	utils.Success(w, http.StatusOK, "Exam types retrieved successfully", resp)
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +94,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, utils.ErrInvalidSubject) {
 		utils.Error(w, http.StatusBadRequest, "Subject not found for this user", err)
+		return
+	}
+	if errors.Is(err, utils.ErrInvalidInput) {
+		utils.Error(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 	if err != nil {

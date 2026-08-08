@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"softixa-solutions.com/studentify/internal/models"
 	"softixa-solutions.com/studentify/internal/utils"
 )
@@ -27,24 +28,38 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) 
 		return nil, err
 	}
 
+	scheduleDays := normalizeScheduleDays(req.ScheduleDays)
+	startTime := strings.TrimSpace(req.StartTime)
+	endTime := strings.TrimSpace(req.EndTime)
+	if err := validateScheduleRange(startTime, endTime); err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	sub := &models.Subject{
-		ID:          uuid.New().String(),
-		UserID:      userID,
-		TeacherID:   teacherID,
-		Name:        strings.TrimSpace(req.Name),
-		Code:        strings.TrimSpace(req.Code),
-		Description: strings.TrimSpace(req.Description),
-		CreditHours: req.CreditHours,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:           uuid.New().String(),
+		UserID:       userID,
+		TeacherID:    teacherID,
+		Name:         strings.TrimSpace(req.Name),
+		Code:         strings.TrimSpace(req.Code),
+		Description:  strings.TrimSpace(req.Description),
+		CreditHours:  req.CreditHours,
+		ScheduleDays: scheduleDays,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		Room:         strings.TrimSpace(req.Room),
+		MeetingLink:  strings.TrimSpace(req.MeetingLink),
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO subjects (
-			id, user_id, teacher_id, name, code, description, credit_hours, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		sub.ID, sub.UserID, nullString(sub.TeacherID), sub.Name, sub.Code, sub.Description, nullFloat(sub.CreditHours), sub.CreatedAt, sub.UpdatedAt,
+			id, user_id, teacher_id, name, code, description, credit_hours,
+			schedule_days, start_time, end_time, room, meeting_link, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+		sub.ID, sub.UserID, nullString(sub.TeacherID), sub.Name, sub.Code, sub.Description, nullFloat(sub.CreditHours),
+		pq.Array(sub.ScheduleDays), sub.StartTime, sub.EndTime, sub.Room, sub.MeetingLink, sub.CreatedAt, sub.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create subject: %w", err)
@@ -54,7 +69,8 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) 
 
 func (s *Service) List(ctx context.Context, userID string) ([]Response, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, user_id, teacher_id, name, code, description, credit_hours, created_at, updated_at
+		SELECT id, user_id, teacher_id, name, code, description, credit_hours,
+			schedule_days, start_time, end_time, room, meeting_link, created_at, updated_at
 		FROM subjects
 		WHERE user_id = $1
 		ORDER BY name ASC`, userID,
@@ -108,13 +124,33 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	if req.CreditHours != nil {
 		sub.CreditHours = req.CreditHours
 	}
+	if req.ScheduleDays != nil {
+		sub.ScheduleDays = normalizeScheduleDays(req.ScheduleDays)
+	}
+	if req.StartTime != nil {
+		sub.StartTime = strings.TrimSpace(*req.StartTime)
+	}
+	if req.EndTime != nil {
+		sub.EndTime = strings.TrimSpace(*req.EndTime)
+	}
+	if req.Room != nil {
+		sub.Room = strings.TrimSpace(*req.Room)
+	}
+	if req.MeetingLink != nil {
+		sub.MeetingLink = strings.TrimSpace(*req.MeetingLink)
+	}
+	if err := validateScheduleRange(sub.StartTime, sub.EndTime); err != nil {
+		return nil, err
+	}
 	sub.UpdatedAt = time.Now()
 
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE subjects
-		SET teacher_id = $3, name = $4, code = $5, description = $6, credit_hours = $7, updated_at = $8
+		SET teacher_id = $3, name = $4, code = $5, description = $6, credit_hours = $7,
+			schedule_days = $8, start_time = $9, end_time = $10, room = $11, meeting_link = $12, updated_at = $13
 		WHERE id = $1 AND user_id = $2`,
-		id, userID, nullString(sub.TeacherID), sub.Name, sub.Code, sub.Description, nullFloat(sub.CreditHours), sub.UpdatedAt,
+		id, userID, nullString(sub.TeacherID), sub.Name, sub.Code, sub.Description, nullFloat(sub.CreditHours),
+		pq.Array(sub.ScheduleDays), sub.StartTime, sub.EndTime, sub.Room, sub.MeetingLink, sub.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update subject: %w", err)
@@ -139,7 +175,8 @@ func (s *Service) Delete(ctx context.Context, userID, id string) error {
 
 func (s *Service) findOwned(ctx context.Context, userID, id string) (*models.Subject, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, user_id, teacher_id, name, code, description, credit_hours, created_at, updated_at
+		SELECT id, user_id, teacher_id, name, code, description, credit_hours,
+			schedule_days, start_time, end_time, room, meeting_link, created_at, updated_at
 		FROM subjects
 		WHERE id = $1 AND user_id = $2`, id, userID,
 	)
@@ -183,8 +220,10 @@ func scanSubject(row scannable) (*models.Subject, error) {
 	var sub models.Subject
 	var teacherID sql.NullString
 	var creditHours sql.NullFloat64
+	var scheduleDays pq.StringArray
 	err := row.Scan(
-		&sub.ID, &sub.UserID, &teacherID, &sub.Name, &sub.Code, &sub.Description, &creditHours, &sub.CreatedAt, &sub.UpdatedAt,
+		&sub.ID, &sub.UserID, &teacherID, &sub.Name, &sub.Code, &sub.Description, &creditHours,
+		&scheduleDays, &sub.StartTime, &sub.EndTime, &sub.Room, &sub.MeetingLink, &sub.CreatedAt, &sub.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -196,20 +235,68 @@ func scanSubject(row scannable) (*models.Subject, error) {
 		v := creditHours.Float64
 		sub.CreditHours = &v
 	}
+	sub.ScheduleDays = []string(scheduleDays)
+	if sub.ScheduleDays == nil {
+		sub.ScheduleDays = []string{}
+	}
 	return &sub, nil
 }
 
 func toResponse(sub *models.Subject) *Response {
-	return &Response{
-		ID:          sub.ID,
-		TeacherID:   sub.TeacherID,
-		Name:        sub.Name,
-		Code:        sub.Code,
-		Description: sub.Description,
-		CreditHours: sub.CreditHours,
-		CreatedAt:   sub.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:   sub.UpdatedAt.UTC().Format(time.RFC3339),
+	days := sub.ScheduleDays
+	if days == nil {
+		days = []string{}
 	}
+	return &Response{
+		ID:           sub.ID,
+		TeacherID:    sub.TeacherID,
+		Name:         sub.Name,
+		Code:         sub.Code,
+		Description:  sub.Description,
+		CreditHours:  sub.CreditHours,
+		ScheduleDays: days,
+		StartTime:    sub.StartTime,
+		EndTime:      sub.EndTime,
+		Room:         sub.Room,
+		MeetingLink:  sub.MeetingLink,
+		CreatedAt:    sub.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:    sub.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func normalizeScheduleDays(days []string) []string {
+	seen := make(map[string]struct{}, len(days))
+	out := make([]string, 0, len(days))
+	for _, day := range days {
+		d := strings.ToLower(strings.TrimSpace(day))
+		if d == "" {
+			continue
+		}
+		if _, ok := seen[d]; ok {
+			continue
+		}
+		seen[d] = struct{}{}
+		out = append(out, d)
+	}
+	return out
+}
+
+func validateScheduleRange(startTime, endTime string) error {
+	if startTime == "" || endTime == "" {
+		return nil
+	}
+	start, err := time.Parse("15:04", startTime)
+	if err != nil {
+		return err
+	}
+	end, err := time.Parse("15:04", endTime)
+	if err != nil {
+		return err
+	}
+	if !end.After(start) {
+		return utils.ErrInvalidScheduleTimes
+	}
+	return nil
 }
 
 func nullString(v *string) interface{} {
