@@ -48,7 +48,7 @@ func (s *Service) Mark(ctx context.Context, userID string, req MarkRequest) (*Re
 
 	status := strings.ToLower(strings.TrimSpace(req.Status))
 	note := strings.TrimSpace(req.Note)
-	// Notes are for late / absent / excused only.
+	// Notes are for late / absent only.
 	if status == "present" {
 		note = ""
 	}
@@ -103,7 +103,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	if req.Note != nil {
 		rec.Note = strings.TrimSpace(*req.Note)
 	}
-	// Notes are for late / absent / excused only.
+	// Notes are for late / absent only.
 	if rec.Status == "present" {
 		rec.Note = ""
 	}
@@ -143,8 +143,7 @@ func (s *Service) Overview(ctx context.Context, userID string) (*OverviewRespons
 		SELECT s.id, s.name, s.code,
 			COALESCE(SUM(CASE WHEN a.status = 'present' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN a.status = 'absent' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN a.status = 'excused' THEN 1 ELSE 0 END), 0)
+			COALESCE(SUM(CASE WHEN a.status = 'late' THEN 1 ELSE 0 END), 0)
 		FROM subjects s
 		LEFT JOIN attendance_records a ON a.subject_id = s.id AND a.user_id = s.user_id
 		WHERE s.user_id = $1
@@ -164,7 +163,7 @@ func (s *Service) Overview(ctx context.Context, userID string) (*OverviewRespons
 		var sum SubjectSummary
 		if err := rows.Scan(
 			&sum.SubjectID, &sum.SubjectName, &sum.SubjectCode,
-			&sum.Present, &sum.Absent, &sum.Late, &sum.Excused,
+			&sum.Present, &sum.Absent, &sum.Late,
 		); err != nil {
 			return nil, err
 		}

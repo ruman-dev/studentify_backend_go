@@ -31,6 +31,11 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) 
 		return nil, fmt.Errorf("parse exam_date: %w", err)
 	}
 
+	total, obtained, err := normalizeMarks(req.TotalMarks, req.ObtainedMarks)
+	if err != nil {
+		return nil, err
+	}
+
 	now := time.Now()
 	e := &models.Exam{
 		ID:              uuid.New().String(),
@@ -41,8 +46,8 @@ func (s *Service) Create(ctx context.Context, userID string, req CreateRequest) 
 		ExamDate:        examDate,
 		DurationMinutes: req.DurationMinutes,
 		Venue:           strings.TrimSpace(req.Venue),
-		TotalMarks:      req.TotalMarks,
-		ObtainedMarks:   req.ObtainedMarks,
+		TotalMarks:      total,
+		ObtainedMarks:   obtained,
 		Notes:           strings.TrimSpace(req.Notes),
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -206,12 +211,20 @@ func (s *Service) Update(ctx context.Context, userID, id string, req UpdateReque
 	if req.Venue != nil {
 		e.Venue = strings.TrimSpace(*req.Venue)
 	}
+	nextTotal := e.TotalMarks
 	if req.TotalMarks != nil {
-		e.TotalMarks = req.TotalMarks
+		nextTotal = req.TotalMarks
 	}
+	nextObtained := e.ObtainedMarks
 	if req.ObtainedMarks != nil {
-		e.ObtainedMarks = req.ObtainedMarks
+		nextObtained = req.ObtainedMarks
 	}
+	total, obtained, err := normalizeMarks(nextTotal, nextObtained)
+	if err != nil {
+		return nil, err
+	}
+	e.TotalMarks = total
+	e.ObtainedMarks = obtained
 	if req.Notes != nil {
 		e.Notes = strings.TrimSpace(*req.Notes)
 	}
@@ -328,6 +341,24 @@ func toResponse(e *models.Exam) *Response {
 		CreatedAt:       e.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:       e.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+// normalizeMarks validates obtained marks against total marks.
+// Obtained marks require a positive total; obtained must be within [0, total].
+func normalizeMarks(total, obtained *float64) (*float64, *float64, error) {
+	if total != nil && *total <= 0 {
+		return nil, nil, fmt.Errorf("%w: total_marks must be greater than 0", utils.ErrInvalidInput)
+	}
+	if obtained == nil {
+		return total, nil, nil
+	}
+	if total == nil {
+		return nil, nil, fmt.Errorf("%w: obtained_marks requires total_marks", utils.ErrInvalidInput)
+	}
+	if *obtained < 0 || *obtained > *total {
+		return nil, nil, fmt.Errorf("%w: obtained_marks must be between 0 and total_marks", utils.ErrInvalidInput)
+	}
+	return total, obtained, nil
 }
 
 func nullInt(v *int) interface{} {

@@ -4,14 +4,14 @@ type MarkRequest struct {
 	SubjectID       string  `json:"subject_id" validate:"required"`
 	SessionStartsAt string  `json:"session_starts_at" validate:"required"` // RFC3339
 	SessionEndsAt   *string `json:"session_ends_at"`                       // RFC3339 optional
-	Status          string  `json:"status" validate:"required,oneof=present absent late excused"`
-	// Optional reason; stored for late/absent/excused. Cleared when status is present.
+	Status          string  `json:"status" validate:"required,oneof=present absent late"`
+	// Optional reason; stored for late/absent. Cleared when status is present.
 	Note string `json:"note"`
 }
 
 type UpdateRequest struct {
-	Status *string `json:"status" validate:"omitempty,oneof=present absent late excused"`
-	// Optional reason; stored for late/absent/excused. Cleared when status is present.
+	Status *string `json:"status" validate:"omitempty,oneof=present absent late"`
+	// Optional reason; stored for late/absent. Cleared when status is present.
 	Note *string `json:"note"`
 }
 
@@ -36,9 +36,8 @@ type SubjectSummary struct {
 	Present     int     `json:"present"`
 	Absent      int     `json:"absent"`
 	Late        int     `json:"late"`
-	Excused     int     `json:"excused"`
 	Attended    int     `json:"attended"` // present + late
-	Total       int     `json:"total"`    // present + absent + late (excused excluded)
+	Total       int     `json:"total"`    // present + absent + late
 	Percentage  float64 `json:"percentage"`
 }
 

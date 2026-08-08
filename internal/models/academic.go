@@ -63,15 +63,17 @@ type Subject struct {
 }
 
 type Assignment struct {
-	ID          string
-	UserID      string
-	SubjectID   string
-	Title       string
-	Description string
-	DueDate     time.Time
-	Status      string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID            string
+	UserID        string
+	SubjectID     string
+	Title         string
+	Description   string
+	DueDate       time.Time
+	Status        string
+	TotalMarks    *float64
+	ObtainedMarks *float64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // Default exam type suggestions. Custom types are auto-saved when used on POST/PUT /exams.
@@ -126,7 +128,6 @@ const (
 	AttendancePresent = "present"
 	AttendanceAbsent  = "absent"
 	AttendanceLate    = "late"
-	AttendanceExcused = "excused"
 )
 
 type AttendanceRecord struct {

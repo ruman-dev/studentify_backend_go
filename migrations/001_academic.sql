@@ -53,15 +53,17 @@ CREATE INDEX IF NOT EXISTS idx_subjects_user_id ON subjects(user_id);
 CREATE INDEX IF NOT EXISTS idx_subjects_teacher_id ON subjects(teacher_id);
 
 CREATE TABLE IF NOT EXISTS assignments (
-    id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    subject_id  TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
-    title       TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    due_date    TIMESTAMPTZ NOT NULL,
-    status      TEXT NOT NULL DEFAULT 'pending',
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject_id      TEXT NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    title           TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    due_date        TIMESTAMPTZ NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    total_marks     DOUBLE PRECISION,
+    obtained_marks  DOUBLE PRECISION,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_assignments_user_id ON assignments(user_id);

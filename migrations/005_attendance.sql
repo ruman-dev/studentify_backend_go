@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT attendance_status_check
-        CHECK (status IN ('present', 'absent', 'late', 'excused')),
+        CHECK (status IN ('present', 'absent', 'late')),
     CONSTRAINT attendance_user_subject_session_unique
         UNIQUE (user_id, subject_id, session_starts_at)
 );

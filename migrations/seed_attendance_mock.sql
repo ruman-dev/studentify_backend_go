@@ -32,10 +32,9 @@ BEGIN
 
             -- Skip future sessions that have not ended yet.
             IF v_end <= NOW() THEN
-                v_status := CASE (EXTRACT(DAY FROM v_day)::INT % 5)
+                v_status := CASE (EXTRACT(DAY FROM v_day)::INT % 4)
                     WHEN 0 THEN 'absent'
                     WHEN 1 THEN 'late'
-                    WHEN 2 THEN 'excused'
                     ELSE 'present'
                 END;
 
@@ -48,7 +47,6 @@ BEGIN
                     CASE v_status
                         WHEN 'absent' THEN 'Missed due to traffic'
                         WHEN 'late' THEN 'Arrived 10 minutes late'
-                        WHEN 'excused' THEN 'Medical leave'
                         ELSE ''
                     END,
                     v_end + INTERVAL '15 minutes',
@@ -99,8 +97,7 @@ SELECT
     COUNT(*) AS sessions,
     COUNT(*) FILTER (WHERE a.status = 'present') AS present,
     COUNT(*) FILTER (WHERE a.status = 'absent') AS absent,
-    COUNT(*) FILTER (WHERE a.status = 'late') AS late,
-    COUNT(*) FILTER (WHERE a.status = 'excused') AS excused
+    COUNT(*) FILTER (WHERE a.status = 'late') AS late
 FROM attendance_records a
 JOIN subjects s ON s.id = a.subject_id
 WHERE a.user_id = '56aec7fa-8c6e-4b8f-add4-d09dd56307ee'

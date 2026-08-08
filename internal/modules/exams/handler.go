@@ -31,6 +31,10 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusBadRequest, "Subject not found for this user", err)
 		return
 	}
+	if errors.Is(err, utils.ErrInvalidInput) {
+		utils.Error(w, http.StatusBadRequest, err.Error(), err)
+		return
+	}
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "Failed to create exam", err)
 		return
@@ -90,6 +94,10 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, utils.ErrInvalidSubject) {
 		utils.Error(w, http.StatusBadRequest, "Subject not found for this user", err)
+		return
+	}
+	if errors.Is(err, utils.ErrInvalidInput) {
+		utils.Error(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 	if err != nil {

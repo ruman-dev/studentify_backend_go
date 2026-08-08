@@ -32,8 +32,8 @@ type Response struct {
 	ExamDate        string   `json:"examDate"`
 	DurationMinutes *int     `json:"durationMinutes,omitempty"`
 	Venue           string   `json:"venue"`
-	TotalMarks      *float64 `json:"totalMarks,omitempty"`
-	ObtainedMarks   *float64 `json:"obtainedMarks,omitempty"`
+	TotalMarks      *float64 `json:"totalMarks"`
+	ObtainedMarks   *float64 `json:"obtainedMarks"`
 	Notes           string   `json:"notes"`
 	CreatedAt       string   `json:"createdAt"`
 	UpdatedAt       string   `json:"updatedAt"`
