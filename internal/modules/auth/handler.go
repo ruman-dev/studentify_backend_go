@@ -24,6 +24,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(req.Email)
 
 	resp, err := h.service.Login(r.Context(), req)
+	if errors.Is(err, utils.ErrUserNotFound) {
+		utils.Error(w, http.StatusUnauthorized, "User not found", err)
+		return
+	}
 	if errors.Is(err, utils.ErrInvalidCredentials) {
 		utils.Error(w, http.StatusUnauthorized, "Invalid email or password", err)
 		return
