@@ -13,6 +13,7 @@ import (
 	"softixa-solutions.com/studentify/internal/modules/exams"
 	"softixa-solutions.com/studentify/internal/modules/notifications"
 	"softixa-solutions.com/studentify/internal/modules/profile"
+	"softixa-solutions.com/studentify/internal/modules/stats"
 	"softixa-solutions.com/studentify/internal/modules/subjects"
 	"softixa-solutions.com/studentify/internal/modules/teachers"
 	"softixa-solutions.com/studentify/internal/utils"
@@ -29,6 +30,7 @@ type Handlers struct {
 	Events        *events.Handler
 	Notifications *notifications.Handler
 	Attendance    *attendance.Handler
+	Stats         *stats.Handler
 }
 
 type Dependencies struct {
@@ -124,4 +126,6 @@ func protectedRoutes(r chi.Router, h Handlers) {
 		r.Put("/{id}", h.Attendance.Update)
 		r.Delete("/{id}", h.Attendance.Delete)
 	})
+
+	r.Get("/stats/overview", h.Stats.Overview)
 }
