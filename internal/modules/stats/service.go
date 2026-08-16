@@ -60,11 +60,7 @@ var colors = []string{"#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#e
 func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStats, error) {
 	stats := &OverviewStats{
 		GrowthJourney: GrowthJourney{
-			RisingLevel:     "Level",
-			StreakTrend:     "+14% This week", // hardcoded trend for now
-			AttendanceTrend: "+3%",
-			TasksTrend:      "+6",
-			FocusTrend:      "-4",
+			RisingLevel: "Emerging",
 		},
 		SubjectStrengths: []SubjectStrength{},
 		AttendanceTrend:  []AttendanceTrend{},
@@ -76,7 +72,7 @@ func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStat
 	err := s.db.QueryRowContext(ctx, `
 		SELECT 
 			COUNT(*),
-			COALESCE(SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END), 0)
+			COALESCE(SUM(CASE WHEN status IN ('present', 'late') THEN 1 ELSE 0 END), 0)
 		FROM attendance_records 
 		WHERE user_id = $1
 	`, userID).Scan(&totalAttendance, &presentCount)
@@ -90,30 +86,72 @@ func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStat
 		stats.GrowthJourney.AttendancePercentage = 0 // Default if no records
 	}
 
-	// 2. Tasks Done (Assignments with obtained marks or status completed)
-	// We'll count ones with obtained_marks IS NOT NULL as 'done' for simplicity
-	var tasksDone int
+	var currentAttendance, previousAttendance sql.NullFloat64
+	err = s.db.QueryRowContext(ctx, `
+		WITH windows AS (
+			SELECT
+				CASE
+					WHEN session_starts_at >= NOW() - INTERVAL '6 weeks' THEN 'current'
+					WHEN session_starts_at >= NOW() - INTERVAL '12 weeks'
+						AND session_starts_at < NOW() - INTERVAL '6 weeks' THEN 'previous'
+				END AS period,
+				status
+			FROM attendance_records
+			WHERE user_id = $1
+				AND session_starts_at >= NOW() - INTERVAL '12 weeks'
+		)
+		SELECT
+			AVG(CASE WHEN status IN ('present', 'late') THEN 100.0 ELSE 0.0 END) FILTER (WHERE period = 'current'),
+			AVG(CASE WHEN status IN ('present', 'late') THEN 100.0 ELSE 0.0 END) FILTER (WHERE period = 'previous')
+		FROM windows
+	`, userID).Scan(&currentAttendance, &previousAttendance)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to fetch attendance trend delta: %w", err)
+	}
+	stats.GrowthJourney.AttendanceTrend = formatPointTrend(currentAttendance, previousAttendance)
+
+	var tasksDone, previousTasksDone, pendingCount int
 	err = s.db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM assignments 
-		WHERE user_id = $1 AND obtained_marks IS NOT NULL
+		WHERE user_id = $1 AND (obtained_marks IS NOT NULL OR status IN ('submitted', 'graded'))
 	`, userID).Scan(&tasksDone)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to fetch tasks stats: %w", err)
 	}
 	stats.GrowthJourney.TasksDone = tasksDone
 
+	err = s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM assignments
+		WHERE user_id = $1
+			AND (obtained_marks IS NOT NULL OR status IN ('submitted', 'graded'))
+			AND updated_at >= NOW() - INTERVAL '7 days'
+	`, userID).Scan(&previousTasksDone)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to fetch weekly tasks stats: %w", err)
+	}
+	stats.GrowthJourney.TasksTrend = formatCountTrend(previousTasksDone)
+
 	// 3. Subject Strengths
 	rows, err := s.db.QueryContext(ctx, `
-		WITH subject_scores AS (
+		WITH assignment_scores AS (
+			SELECT subject_id, SUM(obtained_marks) AS obtained, SUM(total_marks) AS total
+			FROM assignments
+			WHERE user_id = $1 AND obtained_marks IS NOT NULL AND total_marks IS NOT NULL AND total_marks > 0
+			GROUP BY subject_id
+		), exam_scores AS (
+			SELECT subject_id, SUM(obtained_marks) AS obtained, SUM(total_marks) AS total
+			FROM exams
+			WHERE user_id = $1 AND obtained_marks IS NOT NULL AND total_marks IS NOT NULL AND total_marks > 0
+			GROUP BY subject_id
+		), subject_scores AS (
 			SELECT 
 				s.id, s.name,
-				COALESCE(SUM(a.obtained_marks), 0) + COALESCE(SUM(e.obtained_marks), 0) as obtained,
-				COALESCE(SUM(a.total_marks), 0) + COALESCE(SUM(e.total_marks), 0) as total
+				COALESCE(a.obtained, 0) + COALESCE(e.obtained, 0) as obtained,
+				COALESCE(a.total, 0) + COALESCE(e.total, 0) as total
 			FROM subjects s
-			LEFT JOIN assignments a ON s.id = a.subject_id AND a.user_id = $1 AND a.obtained_marks IS NOT NULL AND a.total_marks IS NOT NULL
-			LEFT JOIN exams e ON s.id = e.subject_id AND e.user_id = $1 AND e.obtained_marks IS NOT NULL AND e.total_marks IS NOT NULL
+			LEFT JOIN assignment_scores a ON s.id = a.subject_id
+			LEFT JOIN exam_scores e ON s.id = e.subject_id
 			WHERE s.user_id = $1
-			GROUP BY s.id, s.name
 		)
 		SELECT name, obtained, total FROM subject_scores WHERE total > 0
 	`, userID)
@@ -159,7 +197,7 @@ func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStat
 		SELECT 
 			date_trunc('week', session_starts_at) as week_start,
 			COUNT(*) as total_sessions,
-			SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_sessions
+			SUM(CASE WHEN status IN ('present', 'late') THEN 1 ELSE 0 END) as present_sessions
 		FROM attendance_records
 		WHERE user_id = $1 AND session_starts_at >= NOW() - INTERVAL '6 weeks'
 		GROUP BY date_trunc('week', session_starts_at)
@@ -197,12 +235,48 @@ func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStat
 		})
 	}
 
-	// Synthetic streak & focus score
-	stats.GrowthJourney.StreakDays = presentCount / 2 // Just a placeholder formula
-	if stats.GrowthJourney.StreakDays == 0 {
-		stats.GrowthJourney.StreakDays = 12 // Fallback to design mockup for demo
+	stats.GrowthJourney.StreakDays, err = s.currentAttendanceStreak(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate attendance streak: %w", err)
 	}
-	stats.GrowthJourney.FocusScore = (stats.GrowthJourney.AttendancePercentage + 90) / 2 // Placeholder
+	stats.GrowthJourney.StreakTrend = formatCountTrend(stats.GrowthJourney.StreakDays)
+
+	var averageScore sql.NullFloat64
+	err = s.db.QueryRowContext(ctx, `
+		WITH scores AS (
+			SELECT obtained_marks, total_marks
+			FROM assignments
+			WHERE user_id = $1 AND obtained_marks IS NOT NULL AND total_marks IS NOT NULL AND total_marks > 0
+			UNION ALL
+			SELECT obtained_marks, total_marks
+			FROM exams
+			WHERE user_id = $1 AND obtained_marks IS NOT NULL AND total_marks IS NOT NULL AND total_marks > 0
+		)
+		SELECT (SUM(obtained_marks) / NULLIF(SUM(total_marks), 0)) * 100 FROM scores
+	`, userID).Scan(&averageScore)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to calculate focus score: %w", err)
+	}
+
+	taskCompletionScore := 0.0
+	var totalAssignments int
+	err = s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM assignments WHERE user_id = $1
+	`, userID).Scan(&totalAssignments)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, fmt.Errorf("failed to calculate task completion: %w", err)
+	}
+	if totalAssignments > 0 {
+		taskCompletionScore = float64(tasksDone) / float64(totalAssignments) * 100
+	}
+	scoreComponent := float64(stats.GrowthJourney.AttendancePercentage)
+	if averageScore.Valid {
+		scoreComponent = averageScore.Float64
+	}
+	stats.GrowthJourney.FocusScore = clampPercent(int(math.Round(
+		(float64(stats.GrowthJourney.AttendancePercentage) * 0.4) + (scoreComponent * 0.4) + (taskCompletionScore * 0.2),
+	)))
+	stats.GrowthJourney.FocusTrend = focusLabel(stats.GrowthJourney.FocusScore)
 
 	// 5. Ways to Level Up
 	if lowestSubject != "" {
@@ -248,10 +322,9 @@ func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStat
 	}
 
 	// Check pending assignments
-	var pendingCount int
 	err = s.db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM assignments
-		WHERE user_id = $1 AND obtained_marks IS NULL
+		WHERE user_id = $1 AND obtained_marks IS NULL AND status NOT IN ('submitted', 'graded')
 	`, userID).Scan(&pendingCount)
 	if err == nil && pendingCount > 0 {
 		stats.WaysToLevelUp = append(stats.WaysToLevelUp, LevelUpAdvice{
@@ -268,4 +341,77 @@ func (s *Service) GetOverview(ctx context.Context, userID string) (*OverviewStat
 	}
 
 	return stats, nil
+}
+
+func (s *Service) currentAttendanceStreak(ctx context.Context, userID string) (int, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DATE(session_starts_at) AS day,
+			BOOL_OR(status IN ('present', 'late')) AS attended
+		FROM attendance_records
+		WHERE user_id = $1
+		GROUP BY DATE(session_starts_at)
+		ORDER BY day DESC
+	`, userID)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	streak := 0
+	for rows.Next() {
+		var day time.Time
+		var attended bool
+		if err := rows.Scan(&day, &attended); err != nil {
+			return 0, err
+		}
+		if !attended {
+			break
+		}
+		streak++
+	}
+	return streak, rows.Err()
+}
+
+func formatPointTrend(current, previous sql.NullFloat64) string {
+	if !current.Valid || !previous.Valid {
+		return "New"
+	}
+	delta := int(math.Round(current.Float64 - previous.Float64))
+	if delta > 0 {
+		return fmt.Sprintf("+%d%%", delta)
+	}
+	if delta < 0 {
+		return fmt.Sprintf("%d%%", delta)
+	}
+	return "0%"
+}
+
+func formatCountTrend(count int) string {
+	if count > 0 {
+		return fmt.Sprintf("+%d", count)
+	}
+	return "0"
+}
+
+func focusLabel(score int) string {
+	switch {
+	case score >= 85:
+		return "Excellent"
+	case score >= 70:
+		return "Steady"
+	case score >= 50:
+		return "Building"
+	default:
+		return "Needs focus"
+	}
+}
+
+func clampPercent(value int) int {
+	if value < 0 {
+		return 0
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
 }
