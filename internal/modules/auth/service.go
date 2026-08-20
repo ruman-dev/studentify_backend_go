@@ -36,9 +36,9 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*Response, error
 		return nil, utils.ErrInvalidCredentials
 	}
 
-	token, err := s.tokens.Generate(u.ID, u.Phone, u.Role)
+	accessToken, refreshToken, err := s.tokens.GeneratePair(u.ID, u.Phone, u.Role)
 	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
+		return nil, fmt.Errorf("generate token pair: %w", err)
 	}
 
 	return &Response{
@@ -50,7 +50,9 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*Response, error
 		Role:         u.Role,
 		IsVerified:   u.IsVerified,
 		IsActive:     u.IsActive,
-		Token:        token,
+		Token:        accessToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}, nil
 }
 
@@ -93,7 +95,7 @@ func (s *Service) Register(ctx context.Context, req RegisterRequest) (*string, e
 	}
 
 	if err := utils.SendOTP(u.Email, otp); err != nil {
-		return nil, fmt.Errorf("send otp: %w", err)
+		return nil, fmt.Errorf("%w: %v", utils.ErrOTPSendFailed, err)
 	}
 	successMsg := "OTP sent successfully"
 	return &successMsg, nil
@@ -120,9 +122,9 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (*Respons
 		return nil, err
 	}
 
-	token, err := s.tokens.Generate(u.ID, u.Phone, u.Role)
+	accessToken, refreshToken, err := s.tokens.GeneratePair(u.ID, u.Phone, u.Role)
 	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
+		return nil, fmt.Errorf("generate token pair: %w", err)
 	}
 
 	return &Response{
@@ -134,7 +136,9 @@ func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (*Respons
 		Role:         u.Role,
 		IsVerified:   true,
 		IsActive:     u.IsActive,
-		Token:        token,
+		Token:        accessToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}, nil
 }
 
@@ -158,7 +162,7 @@ func (s *Service) ForgotPassword(ctx context.Context, req ForgotPasswordRequest)
 	}
 
 	if err := utils.SendOTP(u.Email, otp); err != nil {
-		return nil, fmt.Errorf("send otp: %w", err)
+		return nil, fmt.Errorf("%w: %v", utils.ErrOTPSendFailed, err)
 	}
 
 	successMsg := "OTP sent successfully"
@@ -194,6 +198,23 @@ func (s *Service) VerifyForgotPasswordOTP(ctx context.Context, req VerifyOTPRequ
 	return &ForgotPasswordOTPResponse{
 		Email:      u.Email,
 		ResetToken: resetToken,
+	}, nil
+}
+
+func (s *Service) RefreshToken(refreshToken string) (*RefreshTokenResponse, error) {
+	claims, err := s.tokens.ParseRefreshToken(refreshToken)
+	if err != nil {
+		return nil, utils.ErrInvalidToken
+	}
+
+	accessToken, nextRefreshToken, err := s.tokens.GeneratePair(claims.UserID, claims.Phone, claims.Role)
+	if err != nil {
+		return nil, fmt.Errorf("generate token pair: %w", err)
+	}
+
+	return &RefreshTokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: nextRefreshToken,
 	}, nil
 }
 
@@ -280,6 +301,12 @@ func (s *Service) create(ctx context.Context, u *models.User) error {
 		u.IsLocked, u.IsExpired, u.Role, u.CreatedAt, u.UpdatedAt,
 	)
 	if err != nil {
+		if utils.IsUniqueViolation(err, "users_email_key") {
+			return fmt.Errorf("%w: email already taken", utils.ErrEmailTaken)
+		}
+		if utils.IsUniqueViolation(err, "users_phone_key") {
+			return fmt.Errorf("%w: phone number already taken", utils.ErrPhoneTaken)
+		}
 		return fmt.Errorf("create user: %w", err)
 	}
 	return nil

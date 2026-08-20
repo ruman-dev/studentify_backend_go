@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 )
 
 type SuccessResponse struct {
@@ -38,7 +39,7 @@ func Error(w http.ResponseWriter, status int, message string, err error) {
 	w.WriteHeader(status)
 
 	stack := ""
-	if err != nil {
+	if err != nil && os.Getenv("APP_ENV") == "development" {
 		stack = err.Error()
 	}
 

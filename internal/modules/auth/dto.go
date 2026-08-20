@@ -27,6 +27,10 @@ type ResetPasswordRequest struct {
 	Password string `json:"password" validate:"required,password"`
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken" validate:"required"`
+}
+
 type Response struct {
 	UserID       string `json:"userId"`
 	Phone        string `json:"phone"`
@@ -36,7 +40,14 @@ type Response struct {
 	Role         string `json:"role"`
 	IsVerified   bool   `json:"isVerified"`
 	IsActive     bool   `json:"isActive"`
-	Token        string `json:"token"`
+	Token        string `json:"token,omitempty"`
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+}
+
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 type ForgotPasswordOTPResponse struct {

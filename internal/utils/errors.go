@@ -1,6 +1,10 @@
 package utils
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgconn"
+)
 
 var (
 	ErrInvalidCredentials    = errors.New("Invalid credentials")
@@ -18,6 +22,7 @@ var (
 	ErrInvalidRole           = errors.New("Invalid role")
 	ErrInvalidToken          = errors.New("Invalid token")
 	ErrInvalidResetToken     = errors.New("Invalid reset token")
+	ErrOTPSendFailed         = errors.New("Failed to send OTP")
 	ErrPasswordMismatch      = errors.New("Passwords do not match")
 	ErrUserNotVerified       = errors.New("User not verified")
 	ErrNotFound              = errors.New("Resource not found")
@@ -28,3 +33,14 @@ var (
 	ErrInvalidTeacher        = errors.New("Invalid teacher")
 	ErrInvalidInput          = errors.New("Invalid input")
 )
+
+func IsUniqueViolation(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	if pgErr.Code != "23505" {
+		return false
+	}
+	return constraint == "" || pgErr.ConstraintName == constraint
+}

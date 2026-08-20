@@ -50,12 +50,44 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	req.Phone = strings.TrimSpace(req.Phone)
 
 	resp, err := h.service.Register(r.Context(), req)
+	if errors.Is(err, utils.ErrEmailTaken) {
+		utils.Error(w, http.StatusConflict, "Email already taken", err)
+		return
+	}
+	if errors.Is(err, utils.ErrPhoneTaken) {
+		utils.Error(w, http.StatusConflict, "Phone number already taken", err)
+		return
+	}
+	if errors.Is(err, utils.ErrOTPSendFailed) {
+		utils.Error(w, http.StatusServiceUnavailable, "Account created, but failed to send OTP. Please request a new OTP or try again later.", err)
+		return
+	}
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "Registration failed", err)
 		return
 	}
 
 	utils.Success(w, http.StatusCreated, "OTP sent successfully", resp)
+}
+
+func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	var req RefreshTokenRequest
+	if !utils.DecodeAndValidate(w, r, &req) {
+		return
+	}
+	req.RefreshToken = strings.TrimSpace(req.RefreshToken)
+
+	resp, err := h.service.RefreshToken(req.RefreshToken)
+	if errors.Is(err, utils.ErrInvalidToken) {
+		utils.Error(w, http.StatusUnauthorized, "Invalid or expired refresh token", err)
+		return
+	}
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "Failed to refresh token", err)
+		return
+	}
+
+	utils.Success(w, http.StatusOK, "Token refreshed successfully", resp)
 }
 
 func (h *Handler) VerifyOTP(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +129,10 @@ func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.service.ForgotPassword(r.Context(), req)
 	if errors.Is(err, utils.ErrUserNotFound) {
 		utils.Error(w, http.StatusNotFound, "User not found", err)
+		return
+	}
+	if errors.Is(err, utils.ErrOTPSendFailed) {
+		utils.Error(w, http.StatusServiceUnavailable, "Failed to send OTP. Please try again later.", err)
 		return
 	}
 	if err != nil {

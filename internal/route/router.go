@@ -44,11 +44,13 @@ func NewRouter(deps Dependencies) http.Handler {
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.StripSlashes)
 
-	authRoutes(r, deps.Handlers.Auth)
+	r.Route("/api/v1", func(r chi.Router) {
+		authRoutes(r, deps.Handlers.Auth)
 
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.Authenticate(deps.Tokens))
-		protectedRoutes(r, deps.Handlers)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Authenticate(deps.Tokens))
+			protectedRoutes(r, deps.Handlers)
+		})
 	})
 
 	return r
@@ -58,6 +60,7 @@ func authRoutes(r chi.Router, h *auth.Handler) {
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/login", h.Login)
 		r.Post("/register", h.Register)
+		r.Post("/refresh-token", h.RefreshToken)
 		r.Post("/verify-otp", h.VerifyOTP)
 		r.Post("/forgot-password", h.ForgotPassword)
 		r.Post("/forgot-password/verify-otp", h.VerifyForgotPasswordOTP)
