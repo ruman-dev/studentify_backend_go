@@ -40,7 +40,6 @@ type Response struct {
 	Role         string `json:"role"`
 	IsVerified   bool   `json:"isVerified"`
 	IsActive     bool   `json:"isActive"`
-	Token        string `json:"token,omitempty"`
 	AccessToken  string `json:"accessToken"`
 	RefreshToken string `json:"refreshToken"`
 }
